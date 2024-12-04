@@ -1,13 +1,11 @@
-import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Breadcrumb from '../../components/Breadcrumbs/Breadcrumb';
 import LogoDark from '../../images/logo/logo-dark.svg';
 import Logo from '../../images/logo/logo.svg';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 
 const SignIn: React.FC = () => {
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,26 +14,41 @@ const SignIn: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
-      const response = await axios.post('http://localhost:9090/auth/authenticate', {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        'http://localhost:9090/auth/authenticate',
+        { email, password }
+      );
 
-      const { token, messageResponse } = response.data;
+      // Log the entire response.data to check its structure
+      console.log("Response Data:", response.data);
 
-      localStorage.setItem('authToken', token);
+      const { token, messageResponse, user } = response.data;
 
-      navigate('/dashboard'); 
+      // Check if token and user are defined
+      if (!token || !user) {
+        throw new Error('Authentication failed: Missing token or user');
+      }
 
-      console.log(messageResponse);
+      // Store the JWT token and user data in localStorage
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', user);  // Assuming user is the username or some identifier
+
+      console.log('Token:', token);
+      console.log('Message:', messageResponse);
+      console.log('User:', user);
+
+      // Redirect to the home or dashboard page after successful login
+      navigate('/');
     } catch (error: any) {
       if (error.response) {
         setError(error.response.data.messageResponse || 'Authentication failed.');
       } else {
-        setError('An error occurred. Please try again.');
+        setError(error.message || 'An error occurred. Please try again.');
       }
     }
   };
+
+
 
   return (
     <>
