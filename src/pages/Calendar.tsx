@@ -6,20 +6,22 @@ type User = {
   id?: number;
   firstName?: string;
   lastName?: string;
-  // ... other fields if needed
 };
 
-type TimeSheetEvent = {
+// Define a unified event type
+type CalendarEvent = {
   id: number;
-  date: string;       // in YYYY-MM-DD format
-  hoursWorked: number;
-  status: string;
+  date: string;       // YYYY-MM-DD
+  type: 'TIMESHEET' | 'LEAVE';
+  status: string;     // For LEAVE: PENDING/APPROVED/REJECTED, For TIMESHEET: PENDING/APPROVED/REJECTED
+  hoursWorked?: number;   // Only for TIMESHEET
+  reason?: string;        // Only for LEAVE
 };
 
 const Calendar: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth()); // 0-11
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
-  const [events, setEvents] = useState<TimeSheetEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [user, setUser] = useState<User | null>(null);
 
   // Fetch user from localStorage
@@ -35,39 +37,64 @@ const Calendar: React.FC = () => {
     }
   }, []);
 
-  // Fetch timesheet events whenever month/year changes or user updates
   useEffect(() => {
     if (!user || !user.id) return;
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    // We will fetch the user's timesheets for the given month/year
-    // and treat each timesheet as an event on its date.
-    // Adjust the endpoint as needed if you have month/year filters in the backend.
-    // For now, we fetch all and filter client-side.
-    axios.get(`http://localhost:9090/api/time-sheets/user/${user.id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(response => {
-        const allSheets: TimeSheetEvent[] = response.data.map((ts: any) => ({
+    // We fetch timesheets and leave requests and combine them
+    const fetchData = async () => {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // Fetch all timesheets
+        const tsResponse = await axios.get(`http://localhost:9090/api/time-sheets/user/${user.id}`, { headers });
+        const allTimesheets: CalendarEvent[] = tsResponse.data.map((ts: any) => ({
           id: ts.id,
-          date: ts.date, // Ensure this is in YYYY-MM-DD format as per your backend
-          hoursWorked: ts.hoursWorked,
-          status: ts.status
+          date: ts.date, // Ensure backend returns YYYY-MM-DD
+          type: 'TIMESHEET',
+          status: ts.status,
+          hoursWorked: ts.hoursWorked
         }));
 
+        // Fetch all leave requests
+        const lrResponse = await axios.get(`http://localhost:9090/api/leave-requests/user/${user.id}`, { headers });
+        const allLeaves: CalendarEvent[] = [];
+        for (const lr of lrResponse.data) {
+          // lr has startDate and endDate, both YYYY-MM-DD
+          const start = new Date(lr.startDate);
+          const end = new Date(lr.endDate);
+
+          // Generate an event for each day in the leave range
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+
+            allLeaves.push({
+              id: lr.id,
+              date: dateStr,
+              type: 'LEAVE',
+              status: lr.status, // PENDING, APPROVED, REJECTED
+              reason: lr.reason
+            });
+          }
+        }
+
         // Filter events for the current month/year
-        const filtered = allSheets.filter(ev => {
+        const filteredEvents = [...allTimesheets, ...allLeaves].filter(ev => {
           const evDate = new Date(ev.date);
           return evDate.getMonth() === currentMonth && evDate.getFullYear() === currentYear;
         });
-        setEvents(filtered);
-      })
-      .catch(err => {
-        console.error("Error fetching timesheets:", err);
-      });
+
+        setEvents(filteredEvents);
+      } catch (error) {
+        console.error("Error fetching events:", error);
+      }
+    };
+
+    fetchData();
   }, [currentMonth, currentYear, user]);
 
   // Helper function to get days in month
@@ -75,26 +102,13 @@ const Calendar: React.FC = () => {
     return new Date(year, month + 1, 0).getDate();
   };
 
-  // Get array of days for the calendar
   const generateCalendarDays = () => {
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-    const lastDayOfMonth = new Date(currentYear, currentMonth, daysInMonth(currentMonth, currentYear));
-
     const startDay = firstDayOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
-    const endDay = lastDayOfMonth.getDay();
-
     const totalDays = daysInMonth(currentMonth, currentYear);
-
-    // Number of days from previous month to display
-    // For simplicity, we won't show previous/next month days in this example,
-    // but if you want a full calendar view, uncomment this logic:
-    // const prevMonthDaysToShow = startDay;
-    // const nextMonthDaysToShow = 6 - endDay;
-
-    // We'll just leave blank cells at the start.
     const calendarCells: (number | null)[] = [];
 
-    // Add empty cells for days before the first day of month (if you want the full calendar)
+    // Add empty cells for days before the first day of month
     for (let i = 0; i < startDay; i++) {
       calendarCells.push(null);
     }
@@ -115,8 +129,7 @@ const Calendar: React.FC = () => {
     rows.push(calendarCells.slice(i, i + 7));
   }
 
-  // Function to get events for a specific day
-  const getEventsForDay = (day: number | null): TimeSheetEvent[] => {
+  const getEventsForDay = (day: number | null): CalendarEvent[] => {
     if (!day) return [];
     const dateStr = `${currentYear}-${String(currentMonth+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     return events.filter(ev => ev.date === dateStr);
@@ -147,6 +160,25 @@ const Calendar: React.FC = () => {
     }
     setCurrentMonth(newMonth);
     setCurrentYear(newYear);
+  };
+
+  // Determine border color based on event type and status
+  const getEventBorderColor = (event: CalendarEvent) => {
+    if (event.type === 'TIMESHEET') {
+      // Keep the existing primary border
+      return 'border-primary';
+    } else if (event.type === 'LEAVE') {
+      if (event.status === 'PENDING') {
+        return 'border-yellow-500';
+      } else if (event.status === 'APPROVED') {
+        return 'border-green-500';
+      } else if (event.status === 'REJECTED') {
+        return 'border-red-500';
+      } else {
+        return 'border-stroke'; // fallback
+      }
+    }
+    return 'border-stroke';
   };
 
   return (
@@ -220,21 +252,39 @@ const Calendar: React.FC = () => {
                         </span>
                     )}
                     {dayEvents.length > 0 && (
-                      <div className="group h-16 w-full flex-grow cursor-pointer py-1 md:h-30">
-                          <span className="group-hover:text-primary md:hidden">
-                            More
-                          </span>
-                        <div className="event invisible absolute left-2 z-99 mb-1 flex w-[200%] flex-col rounded-sm border-l-[3px] border-primary bg-gray px-3 py-1 text-left opacity-0 group-hover:visible group-hover:opacity-100 dark:bg-meta-4 md:visible md:w-[190%] md:opacity-100">
-                          {dayEvents.map(ev => (
-                            <div key={ev.id}>
-                                <span className="event-name text-sm font-semibold text-black dark:text-white">
-                                  Hours: {ev.hoursWorked}
-                                </span>
-                              <span className="time text-sm font-medium text-black dark:text-white">
-                                  Status: {ev.status}
-                                </span>
-                            </div>
-                          ))}
+                      <div className="group h-16 w-full flex-grow cursor-pointer py-1 md:h-30 relative">
+                        <span className="group-hover:text-primary md:hidden">More</span>
+                        <div
+                          className={`event invisible absolute left-2 z-99 mb-1 flex w-[200%] flex-col rounded-sm px-3 py-1 text-left opacity-0 group-hover:visible group-hover:opacity-100 dark:bg-meta-4 md:visible md:w-[190%] md:opacity-100 bg-gray`}
+                          style={{ transition: 'opacity 0.2s' }}
+                        >
+                          {dayEvents.map(ev => {
+                            const borderColor = getEventBorderColor(ev);
+                            return (
+                              <div key={ev.id} className={`mb-1 border-l-4 pl-2 ${borderColor}`}>
+                                {ev.type === 'TIMESHEET' ? (
+                                  <>
+                                      <span className="event-name text-sm font-semibold text-black dark:text-white block">
+                                        Hours: {ev.hoursWorked}
+                                      </span>
+                                    <span className="time text-sm font-medium text-black dark:text-white block">
+                                        Status: {ev.status}
+                                      </span>
+                                  </>
+                                ) : (
+                                  // LEAVE event
+                                  <>
+                                      <span className="event-name text-sm font-semibold text-black dark:text-white block">
+                                        Reason: {ev.reason}
+                                      </span>
+                                    <span className="time text-sm font-medium text-black dark:text-white block">
+                                        Status: {ev.status}
+                                      </span>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

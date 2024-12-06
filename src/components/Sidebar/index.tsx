@@ -197,7 +197,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                                   (isActive && '!text-white')
                                 }
                               >
-                                eCommerce
+                                Main Page
                               </NavLink>
                             </li>
                           </ul>
@@ -363,7 +363,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                                   (isActive && '!text-white')
                                 }
                               >
-                                Form Layout
+                                Leave Request
                               </NavLink>
                             </li>
                           </ul>
