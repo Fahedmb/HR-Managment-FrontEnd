@@ -1,3 +1,4 @@
+// Calendar.tsx (No comments)
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
@@ -8,32 +9,29 @@ type User = {
   lastName?: string;
 };
 
-// Define a unified event type
 type CalendarEvent = {
   id: number;
-  date: string;       // YYYY-MM-DD
+  date: string;
   type: 'TIMESHEET' | 'LEAVE';
-  status: string;     // For LEAVE: PENDING/APPROVED/REJECTED, For TIMESHEET: PENDING/APPROVED/REJECTED
-  hoursWorked?: number;   // Only for TIMESHEET
-  reason?: string;        // Only for LEAVE
+  status: string;
+  hoursWorked?: number;
+  reason?: string;
 };
 
 const Calendar: React.FC = () => {
-  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth()); // 0-11
+  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [schedule, setSchedule] = useState<any>(null);
 
-  // Fetch user from localStorage
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
-      } catch (err) {
-        console.error("Failed to parse user data:", err);
-      }
+      } catch {}
     }
   }, []);
 
@@ -41,89 +39,78 @@ const Calendar: React.FC = () => {
     if (!user || !user.id) return;
     const token = localStorage.getItem('token');
     if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
 
-    // We fetch timesheets and leave requests and combine them
+    const fetchSchedule = async () => {
+      try {
+        const res = await axios.get(`http://localhost:9090/api/timesheet-schedules/user/${user.id}`, { headers });
+        setSchedule(res.data);
+      } catch {}
+    };
+
     const fetchData = async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-
-        // Fetch all timesheets
         const tsResponse = await axios.get(`http://localhost:9090/api/time-sheets/user/${user.id}`, { headers });
         const allTimesheets: CalendarEvent[] = tsResponse.data.map((ts: any) => ({
           id: ts.id,
-          date: ts.date, // Ensure backend returns YYYY-MM-DD
+          date: ts.date,
           type: 'TIMESHEET',
           status: ts.status,
           hoursWorked: ts.hoursWorked
         }));
 
-        // Fetch all leave requests
         const lrResponse = await axios.get(`http://localhost:9090/api/leave-requests/user/${user.id}`, { headers });
         const allLeaves: CalendarEvent[] = [];
         for (const lr of lrResponse.data) {
-          // lr has startDate and endDate, both YYYY-MM-DD
           const start = new Date(lr.startDate);
           const end = new Date(lr.endDate);
-
-          // Generate an event for each day in the leave range
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const day = String(d.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
-
             allLeaves.push({
               id: lr.id,
               date: dateStr,
               type: 'LEAVE',
-              status: lr.status, // PENDING, APPROVED, REJECTED
+              status: lr.status,
               reason: lr.reason
             });
           }
         }
 
-        // Filter events for the current month/year
         const filteredEvents = [...allTimesheets, ...allLeaves].filter(ev => {
           const evDate = new Date(ev.date);
           return evDate.getMonth() === currentMonth && evDate.getFullYear() === currentYear;
         });
 
         setEvents(filteredEvents);
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      }
+      } catch {}
     };
 
-    fetchData();
+    fetchSchedule().then(() => fetchData());
   }, [currentMonth, currentYear, user]);
 
-  // Helper function to get days in month
   const daysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
 
   const generateCalendarDays = () => {
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-    const startDay = firstDayOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
+    const startDay = firstDayOfMonth.getDay();
     const totalDays = daysInMonth(currentMonth, currentYear);
     const calendarCells: (number | null)[] = [];
-
-    // Add empty cells for days before the first day of month
     for (let i = 0; i < startDay; i++) {
       calendarCells.push(null);
     }
-
-    // Add days of current month
     for (let day = 1; day <= totalDays; day++) {
       calendarCells.push(day);
     }
-
     return calendarCells;
   };
 
   const calendarCells = generateCalendarDays();
 
-  // Split into weeks (rows)
   const rows = [];
   for (let i = 0; i < calendarCells.length; i += 7) {
     rows.push(calendarCells.slice(i, i + 7));
@@ -162,10 +149,8 @@ const Calendar: React.FC = () => {
     setCurrentYear(newYear);
   };
 
-  // Determine border color based on event type and status
   const getEventBorderColor = (event: CalendarEvent) => {
     if (event.type === 'TIMESHEET') {
-      // Keep the existing primary border
       return 'border-primary';
     } else if (event.type === 'LEAVE') {
       if (event.status === 'PENDING') {
@@ -175,10 +160,31 @@ const Calendar: React.FC = () => {
       } else if (event.status === 'REJECTED') {
         return 'border-red-500';
       } else {
-        return 'border-stroke'; // fallback
+        return 'border-stroke';
       }
     }
     return 'border-stroke';
+  };
+
+  const getWeekdayForDay = (day: number) => {
+    const date = new Date(currentYear, currentMonth, day);
+    const weekdayIndex = date.getDay();
+    const mapping = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+    return mapping[weekdayIndex];
+  };
+
+  let scheduleCreationDate: Date | null = null;
+  if (schedule && schedule.createdAt) {
+    scheduleCreationDate = new Date(schedule.createdAt);
+  }
+
+  const showWorkLabelForDay = (day: number) => {
+    if (!schedule || !schedule.chosenDays) return false;
+    const weekday = getWeekdayForDay(day);
+    if (!schedule.chosenDays.includes(weekday)) return false;
+    if (!scheduleCreationDate) return false;
+    const currentDate = new Date(currentYear, currentMonth, day);
+    return currentDate >= scheduleCreationDate;
   };
 
   return (
@@ -249,13 +255,18 @@ const Calendar: React.FC = () => {
                     {day && (
                       <span className="font-medium text-black dark:text-white">
                           {day}
+                        {showWorkLabelForDay(day) && (
+                          <span className={`ml-2 text-xs font-semibold ${schedule.status === 'APPROVED' ? 'text-green-500' : schedule.status === 'PENDING' ? 'text-yellow-500' : schedule.status === 'PENDING_DELETION' ? 'text-yellow-500' : ''}`}>
+                              Work{schedule.status === 'PENDING' ? ' (Pending)' : schedule.status === 'PENDING_DELETION' ? ' (Pending Deletion)' : ''}
+                            </span>
+                        )}
                         </span>
                     )}
                     {dayEvents.length > 0 && (
                       <div className="group h-16 w-full flex-grow cursor-pointer py-1 md:h-30 relative">
                         <span className="group-hover:text-primary md:hidden">More</span>
                         <div
-                          className={`event invisible absolute left-2 z-99 mb-1 flex w-[200%] flex-col rounded-sm px-3 py-1 text-left opacity-0 group-hover:visible group-hover:opacity-100 dark:bg-meta-4 md:visible md:w-[190%] md:opacity-100 bg-gray`}
+                          className="event invisible absolute left-2 z-99 mb-1 flex w-[200%] flex-col rounded-sm px-3 py-1 text-left opacity-0 group-hover:visible group-hover:opacity-100 dark:bg-meta-4 md:visible md:w-[190%] md:opacity-100 bg-gray"
                           style={{ transition: 'opacity 0.2s' }}
                         >
                           {dayEvents.map(ev => {
@@ -272,7 +283,6 @@ const Calendar: React.FC = () => {
                                       </span>
                                   </>
                                 ) : (
-                                  // LEAVE event
                                   <>
                                       <span className="event-name text-sm font-semibold text-black dark:text-white block">
                                         Reason: {ev.reason}

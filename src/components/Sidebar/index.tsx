@@ -352,7 +352,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                                   (isActive && '!text-white')
                                 }
                               >
-                                Form Elements
+                                Time Sheet Schedule
                               </NavLink>
                             </li>
                             <li>
