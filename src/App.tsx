@@ -7,7 +7,7 @@ import SignIn from './pages/Authentication/SignIn';
 import SignUp from './pages/Authentication/SignUp';
 import Calendar from './pages/Calendar';
 import Chart from './pages/Chart';
-import ECommerce from './pages/Dashboard/ECommerce';
+import ECommerce from './pages/Dashboard/DashboardEmployee.tsx';
 import FormElements from './pages/Form/TimesheetScheduleForm.tsx';
 import FormLayout from './pages/Form/LeaveRequestForm.tsx';
 import Profile from './pages/Profile';
@@ -17,6 +17,7 @@ import Alerts from './pages/UiElements/Alerts';
 import Buttons from './pages/UiElements/Buttons';
 import DefaultLayout from './layout/DefaultLayout';
 import { AuthProvider, AuthContext } from './context/AuthContext';
+import DashboardHR from './pages/Dashboard/DashboardHR.tsx';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -66,6 +67,15 @@ function App() {
             }
           />
           {/* Protected Route Example */}
+          <Route
+            path="/Dashboard/DashboardHR.tsx"
+            element={
+              <>
+                <PageTitle title="eCommerce Dashboard | TailAdmin - Tailwind CSS Admin Dashboard Template" />
+                <DashboardHR />
+              </>
+            }
+          />
           <Route
             path="/profile"
             element={

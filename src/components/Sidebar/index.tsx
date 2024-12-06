@@ -182,7 +182,28 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                             />
                           </svg>
                         </NavLink>
+
                         {/* <!-- Dropdown Menu Start --> */}
+                        <div
+                          className={`translate transform overflow-hidden ${
+                            !open && 'hidden'
+                          }`}
+                        >
+                          <ul className="mt-4 mb-5.5 flex flex-col gap-2.5 pl-6">
+                            <li>
+                              <NavLink
+                                to="/Dashboard/DashboardHR.tsx"
+                                className={({ isActive }) =>
+                                  'group relative flex items-center gap-2.5 rounded-md px-4 font-medium text-bodydark2 duration-300 ease-in-out hover:text-white ' +
+                                  (isActive && '!text-white')
+                                }
+                              >
+                                My Control Panel
+                              </NavLink>
+                            </li>
+                          </ul>
+                        </div>
+
                         <div
                           className={`translate transform overflow-hidden ${
                             !open && 'hidden'
@@ -197,7 +218,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                                   (isActive && '!text-white')
                                 }
                               >
-                                Main Page
+                                My Dashboard
                               </NavLink>
                             </li>
                           </ul>
@@ -241,7 +262,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   <NavLink
                     to="/profile"
                     className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                      pathname.includes('profile') && 'bg-graydark dark:bg-meta-4'
+                      pathname.includes('profile') &&
+                      'bg-graydark dark:bg-meta-4'
                     }`}
                   >
                     <svg
@@ -380,7 +402,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   <NavLink
                     to="/tables"
                     className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                      pathname.includes('tables') && 'bg-graydark dark:bg-meta-4'
+                      pathname.includes('tables') &&
+                      'bg-graydark dark:bg-meta-4'
                     }`}
                   >
                     <svg
@@ -509,7 +532,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
                 {/* <!-- Menu Item Ui Elements --> */}
                 <SidebarLinkGroup
-                  activeCondition={pathname === '/ui' || pathname.includes('ui')}
+                  activeCondition={
+                    pathname === '/ui' || pathname.includes('ui')
+                  }
                 >
                   {(handleClick, open) => {
                     return (
@@ -629,7 +654,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                         <NavLink
                           to="#"
                           className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                            (pathname === '/auth' || pathname.includes('auth')) &&
+                            (pathname === '/auth' ||
+                              pathname.includes('auth')) &&
                             'bg-graydark dark:bg-meta-4'
                           }`}
                           onClick={(e) => {
@@ -730,7 +756,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           {/* <!-- Sidebar Menu --> */}
         </div>
       </aside>
-    )
+    );
 };
 
 export default Sidebar;
