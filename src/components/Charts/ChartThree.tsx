@@ -1,15 +1,19 @@
-// ChartThree.tsx
 import { ApexOptions } from 'apexcharts';
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState, useRef } from 'react';
 import ReactApexChart from 'react-apexcharts';
 
-const ChartThree: React.FC = () => {
+type ChartThreeProps = {
+  onChartReady?: (dataUrl: string) => void;
+};
+
+const ChartThree: React.FC<ChartThreeProps> = ({ onChartReady }) => {
   const [workedDays, setWorkedDays] = useState<number>(0);
   const [leaveDays, setLeaveDays] = useState<number>(0);
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const chartRef = useRef<any>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -33,11 +37,15 @@ const ChartThree: React.FC = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-
-        const res = await axios.get(`http://localhost:9090/api/analytics/${userId}?period=Monthly`, { headers });
-
-        setWorkedDays(res.data.restDays);
-        setLeaveDays(res.data.leaveDays);
+        const res = await fetch(`http://localhost:9090/api/analytics/${userId}?period=Monthly`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setWorkedDays(data.restDays);
+          setLeaveDays(data.leaveDays);
+        } else {
+          setWorkedDays(0);
+          setLeaveDays(0);
+        }
       } catch {
         setWorkedDays(0);
         setLeaveDays(0);
@@ -92,6 +100,19 @@ const ChartThree: React.FC = () => {
     ],
   };
 
+  useEffect(() => {
+    if (!isLoading && chartRef.current && chartRef.current.chart && onChartReady) {
+      // Give chart a slight delay to ensure rendering is complete
+      setTimeout(() => {
+        chartRef.current.chart.dataURI().then((uri: any) => {
+          if (uri?.imgURI) {
+            onChartReady(uri.imgURI);
+          }
+        });
+      }, 500);
+    }
+  }, [isLoading, onChartReady]);
+
   return (
     <div className="sm:px-7.5 col-span-12 rounded-sm border border-stroke bg-white px-5 pb-5 pt-7.5 shadow-default dark:border-strokedark dark:bg-boxdark xl:col-span-5">
       <div className="mb-3 flex justify-between gap-4">
@@ -109,6 +130,7 @@ const ChartThree: React.FC = () => {
           <div className="mb-2">
             <div id="chartThree" className="mx-auto flex justify-center">
               <ReactApexChart
+                ref={chartRef}
                 options={options}
                 series={series}
                 type="donut"

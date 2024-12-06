@@ -3,6 +3,7 @@ import CardDataStats from '../../components/CardDataStats';
 import ChartOne from '../../components/Charts/ChartOne';
 import ChatCard from '../../components/Chat/ChatCard';
 import TableTwo from '../../components/Tables/TableTwo.tsx';
+import TableOne from '../../components/Tables/TableOne.tsx';
 
 const ECommerce: React.FC = () => {
 
@@ -94,11 +95,24 @@ const ECommerce: React.FC = () => {
           </svg>
         </CardDataStats>
       </div>
-      <ChartOne />
+      <div className={"mt-6"}>
+        <ChartOne />
+      </div>
       <div className="mt-4 grid grid-cols-12 gap-4 md:mt-6 md:gap-6 2xl:mt-7.5 2xl:gap-7.5">
 
-        <div className="col-span-12 xl:col-span-8">
+        <div className="col-span-12 xl:col-span-8 gap-4">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-title-md2 font-semibold text-black dark:text-white">
+              Employees
+            </h2>
+          </div>
           <TableTwo />
+          <div className="mb-6 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-title-md2 font-semibold text-black dark:text-white">
+              Requests
+            </h2>
+          </div>
+          <TableOne />
         </div>
         <ChatCard />
       </div>

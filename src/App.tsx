@@ -8,16 +8,15 @@ import SignUp from './pages/Authentication/SignUp';
 import Calendar from './pages/Calendar';
 import Chart from './pages/Chart';
 import ECommerce from './pages/Dashboard/DashboardEmployee.tsx';
-import FormElements from './pages/Form/TimesheetScheduleForm.tsx';
-import FormLayout from './pages/Form/LeaveRequestForm.tsx';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Tables from './pages/Tables';
-import Alerts from './pages/UiElements/Alerts';
-import Buttons from './pages/UiElements/Buttons';
 import DefaultLayout from './layout/DefaultLayout';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import DashboardHR from './pages/Dashboard/DashboardHR.tsx';
+import TimesheetScheduleFormHR from './pages/UiElements/TimesheetScheduleFormHR.tsx';
+import LeaveRequestFormHR from './pages/UiElements/LeaveRequestFormHR.tsx';
+import TimesheetScheduleForm from './pages/Form/TimesheetScheduleForm.tsx';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -86,20 +85,20 @@ function App() {
             }
           />
           <Route
-            path="/forms/form-elements"
+            path="/forms/TimesheetScheduleForm"
             element={
               <>
                 <PageTitle title="Form Elements | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <FormElements />
+                <TimesheetScheduleForm />
               </>
             }
           />
           <Route
-            path="/forms/form-layout"
+            path="/forms/LeaveRequestFormHR"
             element={
               <>
                 <PageTitle title="Form Layout | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <FormLayout />
+                <LeaveRequestFormHR />
               </>
             }
           />
@@ -131,20 +130,20 @@ function App() {
             }
           />
           <Route
-            path="/ui/alerts"
+            path="/ui/TimesheetScheduleFormHR"
             element={
               <>
                 <PageTitle title="Alerts | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Alerts />
+                <TimesheetScheduleFormHR />
               </>
             }
           />
           <Route
-            path="/ui/buttons"
+            path="/ui/LeaveRequestFormHR"
             element={
               <>
                 <PageTitle title="Buttons | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Buttons />
+                <LeaveRequestFormHR />
               </>
             }
           />
@@ -158,7 +157,6 @@ function App() {
               </>
             }
           />
-          {/* SignUp Route: Accessible without authentication */}
           <Route
             path="/auth/signup"
             element={
