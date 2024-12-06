@@ -19,25 +19,20 @@ const SignIn: React.FC = () => {
         { email, password }
       );
 
-      // Log the entire response.data to check its structure
-      console.log("Response Data:", response.data);
-
+      // Extract token and user from the response
       const { token, messageResponse, user } = response.data;
 
-      // Check if token and user are defined
       if (!token || !user) {
         throw new Error('Authentication failed: Missing token or user');
       }
 
-      // Store the JWT token and user data in localStorage
       localStorage.setItem('token', token);
-      localStorage.setItem('user', user);  // Assuming user is the username or some identifier
+      localStorage.setItem('user', JSON.stringify(user));
 
       console.log('Token:', token);
       console.log('Message:', messageResponse);
       console.log('User:', user);
 
-      // Redirect to the home or dashboard page after successful login
       navigate('/');
     } catch (error: any) {
       if (error.response) {

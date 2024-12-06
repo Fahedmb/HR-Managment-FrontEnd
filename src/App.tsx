@@ -138,6 +138,7 @@ function App() {
               </>
             }
           />
+          {/* Authentication Routes */}
           <Route
             path="/auth/signin"
             element={
@@ -147,6 +148,7 @@ function App() {
               </>
             }
           />
+          {/* SignUp Route: Accessible without authentication */}
           <Route
             path="/auth/signup"
             element={
