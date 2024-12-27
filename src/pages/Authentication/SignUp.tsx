@@ -295,7 +295,7 @@ const SignUp: React.FC = () => {
                   <div className="relative">
                     <input
                       type="text"
-                      name="Last Name"
+                      name="lastName"
                       placeholder="Enter your last name"
                       value={formData.lastName}
                       onChange={handleChange}

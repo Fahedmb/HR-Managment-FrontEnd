@@ -19,7 +19,6 @@ const SignIn: React.FC = () => {
         { email, password }
       );
 
-      // Extract token and user from the response
       const { token, messageResponse, user } = response.data;
 
       if (!token || !user) {

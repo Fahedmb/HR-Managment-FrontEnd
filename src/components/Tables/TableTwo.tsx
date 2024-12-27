@@ -1,3 +1,4 @@
+// File: src/components/Tables/TableTwo.tsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import jsPDF from 'jspdf';
@@ -12,6 +13,8 @@ interface UserDTO {
 
 const TableTwo: React.FC = () => {
   const [users, setUsers] = useState<UserDTO[]>([]);
+  const [search, setSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof UserDTO | 'status'; direction: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -25,13 +28,11 @@ const TableTwo: React.FC = () => {
     fetchUsers();
   }, []);
 
-  // Basic logic: if user.position has text => "Working", else => "Not Working"
   const getStatusLabel = (user: UserDTO) => {
     if (user.position && user.position.trim() !== '') return 'Working';
     return 'Not Working';
   };
 
-  // Delete user by ID
   const handleDelete = async (userId: number) => {
     try {
       await axios.delete(`http://localhost:9090/api/users/${userId}`);
@@ -41,19 +42,14 @@ const TableTwo: React.FC = () => {
     }
   };
 
-  // Toggle role between EMPLOYEE <-> HR
   const handleRoleToggle = async (user: UserDTO) => {
     const newRole = user.role === 'EMPLOYEE' ? 'HR' : 'EMPLOYEE';
 
     try {
-      // We do a PUT to /api/users/{id}, sending the new role
-      const updated = await axios.put(`http://localhost:9090/api/users/${user.id}`, {
+      await axios.put(`http://localhost:9090/api/users/${user.id}`, {
         ...user,
-        role: newRole,  // <-- critical part
+        role: newRole,
       });
-
-      // The server returns the updated user (ideally),
-      // but you can just do local state update:
       setUsers((prev) =>
         prev.map((u) =>
           u.id === user.id ? { ...u, role: newRole } : u
@@ -64,14 +60,13 @@ const TableTwo: React.FC = () => {
     }
   };
 
-  // Export PDF of the employees list (username, position, role, status)
   const handleExportPDF = () => {
     try {
       const doc = new jsPDF();
       doc.setFontSize(12);
       doc.text('Employees List', 14, 16);
 
-      const rows = users.map((u) => [
+      const rows = filteredUsers.map((u) => [
         u.username,
         u.position || '',
         u.role,
@@ -90,12 +85,60 @@ const TableTwo: React.FC = () => {
     }
   };
 
+  const handleSort = (key: keyof UserDTO | 'status') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedUsers = React.useMemo(() => {
+    let sortableUsers = [...users];
+    if (sortConfig !== null) {
+      sortableUsers.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+        if (sortConfig.key === 'status') {
+          aValue = getStatusLabel(a);
+          bValue = getStatusLabel(b);
+        } else {
+          aValue = a[sortConfig.key];
+          bValue = b[sortConfig.key];
+        }
+        if (aValue === null) return 1;
+        if (bValue === null) return -1;
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableUsers;
+  }, [users, sortConfig]);
+
+  const filteredUsers = sortedUsers.filter((user) =>
+    user.username.toLowerCase().includes(search.toLowerCase()) ||
+    (user.position && user.position.toLowerCase().includes(search.toLowerCase())) ||
+    user.role.toLowerCase().includes(search.toLowerCase()) ||
+    getStatusLabel(user).toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default 
                     dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
 
-      {/* PDF Button */}
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex justify-between">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="border border-gray-300 rounded px-3 py-2"
+        />
         <button
           onClick={handleExportPDF}
           className="rounded bg-primary py-2 px-4 text-white hover:bg-opacity-90"
@@ -104,19 +147,27 @@ const TableTwo: React.FC = () => {
         </button>
       </div>
 
-      {/* Table */}
       <div className="max-w-full overflow-x-auto">
         <table className="w-full table-auto">
           <thead>
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
-                Username
+              <th
+                className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11 cursor-pointer"
+                onClick={() => handleSort('username')}
+              >
+                Username {sortConfig?.key === 'username' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
               </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
-                Position
+              <th
+                className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white cursor-pointer"
+                onClick={() => handleSort('position')}
+              >
+                Position {sortConfig?.key === 'position' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
               </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
-                Status
+              <th
+                className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white cursor-pointer"
+                onClick={() => handleSort('status')}
+              >
+                Status {sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
               </th>
               <th className="py-4 px-4 font-medium text-black dark:text-white">
                 Actions
@@ -124,11 +175,10 @@ const TableTwo: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => {
+            {filteredUsers.map((user) => {
               const statusLabel = getStatusLabel(user);
               return (
                 <tr key={user.id}>
-                  {/* Username */}
                   <td
                     className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11"
                   >
@@ -137,14 +187,12 @@ const TableTwo: React.FC = () => {
                     </h5>
                   </td>
 
-                  {/* Position */}
                   <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                     <p className="text-black dark:text-white">
                       {user.position || 'N/A'}
                     </p>
                   </td>
 
-                  {/* Status */}
                   <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                     <p
                       className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
@@ -157,11 +205,9 @@ const TableTwo: React.FC = () => {
                     </p>
                   </td>
 
-                  {/* Actions */}
                   <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                     <div className="flex items-center space-x-3.5">
 
-                      {/* Make HR / Make Employee button */}
                       <button
                         onClick={() => handleRoleToggle(user)}
                         className="hover:text-primary"
@@ -169,7 +215,6 @@ const TableTwo: React.FC = () => {
                         {user.role === 'EMPLOYEE' ? 'Make HR' : 'Make Employee'}
                       </button>
 
-                      {/* Delete button */}
                       <button
                         onClick={() => handleDelete(user.id)}
                         className="hover:text-primary"
@@ -204,12 +249,12 @@ const TableTwo: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
   );
 };
 
