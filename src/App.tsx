@@ -18,19 +18,16 @@ import TimesheetScheduleFormHR from './pages/UiElements/TimesheetScheduleFormHR.
 import LeaveRequestFormHR from './pages/UiElements/LeaveRequestFormHR.tsx';
 import TimesheetScheduleForm from './pages/Form/TimesheetScheduleForm.tsx';
 
-// ProtectedRoute component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const authContext = useContext(AuthContext);
-
-  if (!authContext || !authContext.isAuthenticated) {
+  const { isAuthenticated } = useContext(AuthContext) || {};
+  if (!isAuthenticated) {
     return <Navigate to="/auth/signin" />;
   }
-
   return <>{children}</>;
 };
 
 function App() {
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const { pathname } = useLocation();
 
   useEffect(() => {
@@ -38,121 +35,27 @@ function App() {
   }, [pathname]);
 
   useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
+    // Just simulating a loading state
+    const timer = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(timer);
   }, []);
 
-  return loading ? (
-    <Loader />
-  ) : (
+  if (loading) return <Loader />;
+
+  return (
     <AuthProvider>
+      {/* 
+        Use DefaultLayout at the top-level so that every route
+        gets the same consistent UI, without forcing signIn/signUp to be protected.
+      */}
       <DefaultLayout>
         <Routes>
-          <Route
-            index
-            element={
-              <>
-                <PageTitle title="eCommerce Dashboard | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <ECommerce />
-              </>
-            }
-          />
-          <Route
-            path="/calendar"
-            element={
-              <>
-                <PageTitle title="Calendar | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Calendar />
-              </>
-            }
-          />
-          {/* Protected Route Example */}
-          <Route
-            path="/Dashboard/DashboardHR.tsx"
-            element={
-              <>
-                <PageTitle title="eCommerce Dashboard | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <DashboardHR />
-              </>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <PageTitle title="Profile | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/forms/TimesheetScheduleForm"
-            element={
-              <>
-                <PageTitle title="Form Elements | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <TimesheetScheduleForm />
-              </>
-            }
-          />
-          <Route
-            path="/forms/LeaveRequestFormHR"
-            element={
-              <>
-                <PageTitle title="Form Layout | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <LeaveRequestFormHR />
-              </>
-            }
-          />
-          <Route
-            path="/tables"
-            element={
-              <>
-                <PageTitle title="Tables | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Tables />
-              </>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <>
-                <PageTitle title="Settings | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Settings />
-              </>
-            }
-          />
-          <Route
-            path="/chart"
-            element={
-              <>
-                <PageTitle title="Basic Chart | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <Chart />
-              </>
-            }
-          />
-          <Route
-            path="/ui/TimesheetScheduleFormHR"
-            element={
-              <>
-                <PageTitle title="Alerts | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <TimesheetScheduleFormHR />
-              </>
-            }
-          />
-          <Route
-            path="/ui/LeaveRequestFormHR"
-            element={
-              <>
-                <PageTitle title="Buttons | TailAdmin - Tailwind CSS Admin Dashboard Template" />
-                <LeaveRequestFormHR />
-              </>
-            }
-          />
-          {/* Authentication Routes */}
+          {/* Public (no auth required) */}
           <Route
             path="/auth/signin"
             element={
               <>
-                <PageTitle title="Signin | TailAdmin - Tailwind CSS Admin Dashboard Template" />
+                <PageTitle title="Sign In" />
                 <SignIn />
               </>
             }
@@ -161,9 +64,110 @@ function App() {
             path="/auth/signup"
             element={
               <>
-                <PageTitle title="Signup | TailAdmin - Tailwind CSS Admin Dashboard Template" />
+                <PageTitle title="Sign Up" />
                 <SignUp />
               </>
+            }
+          />
+
+          {/* Protected (requires auth) */}
+          <Route
+            index
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Employee Dashboard" />
+                <ECommerce />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Calendar" />
+                <Calendar />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/Dashboard/DashboardHR.tsx"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Dashboard HR" />
+                <DashboardHR />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Profile" />
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/forms/TimesheetScheduleForm"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Timesheet Schedule Form" />
+                <TimesheetScheduleForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/forms/LeaveRequestFormHR"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Leave Request Form" />
+                <LeaveRequestFormHR />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tables"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Tables" />
+                <Tables />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Settings" />
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chart"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Charts" />
+                <Chart />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/TimesheetScheduleFormHR"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Timesheet Schedule HR" />
+                <TimesheetScheduleFormHR />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/LeaveRequestFormHR"
+            element={
+              <ProtectedRoute>
+                <PageTitle title="Leave Request HR" />
+                <LeaveRequestFormHR />
+              </ProtectedRoute>
             }
           />
         </Routes>
