@@ -1,3 +1,5 @@
+// File: src/pages/UiElements/LeaveRequestFormHR.tsx
+
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Breadcrumb from '../../components/Breadcrumbs/Breadcrumb';
@@ -49,9 +51,9 @@ const LeaveRequestForm: React.FC = () => {
 
   // Fetch leave balance
   useEffect(() => {
-    if (!userId || !token) return;
+    if (!token) return; // Ensure token exists
 
-    axios.get(`http://localhost:9090/api/leave-requests/balance/${userId}`, {
+    axios.get(`http://localhost:9090/api/leave-requests/balance`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -61,15 +63,16 @@ const LeaveRequestForm: React.FC = () => {
       })
       .catch(error => {
         console.error("Error fetching leave balance:", error);
+        setErrorMessage("Failed to fetch leave balance. Please try again later.");
       });
-  }, [userId, token]);
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!userId || !token) {
+    if (!token) {
       setErrorMessage("You are not logged in. Please log in first.");
       return;
     }
@@ -93,7 +96,7 @@ const LeaveRequestForm: React.FC = () => {
     }
 
     const requestBody = {
-      userId: userId,
+      userId: userId, // Optional if backend infers from token
       startDate: startDate,
       endDate: endDate,
       type: leaveType,
@@ -113,6 +116,14 @@ const LeaveRequestForm: React.FC = () => {
       setEndDate('');
       setReason('');
       setLeaveType('VACATION');
+
+      // Refresh leave balance
+      const balanceResponse = await axios.get(`http://localhost:9090/api/leave-requests/balance`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      setLeaveBalance(balanceResponse.data);
     } catch (error: any) {
       console.error("Error submitting leave request:", error);
       setErrorMessage("Failed to submit leave request. Please try again.");
@@ -176,7 +187,7 @@ const LeaveRequestForm: React.FC = () => {
       )}
 
       {successMessage && (
-        <div className="mb-4 flex w-full border-l-6 border-[#34D399] bg-[#34D399] bg-opacity-[15%] px-5 py-4 shadow-md dark:bg-[#1B1B24] dark:bg-opacity-30">
+        <div className="mb-4 flex w-full border-l-6 border-[#34D399] bg-[#34D399] bg-opacity-[15%] px-5 py-4 shadow-md dark:border-strokedark dark:bg-boxdark dark:bg-opacity-30">
           <div className="mr-5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#34D399]">
             <svg
               width="16"
