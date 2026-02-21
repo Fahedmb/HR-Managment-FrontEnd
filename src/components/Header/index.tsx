@@ -1,131 +1,114 @@
-import { Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Menu, Search, Sun, Moon, LogOut } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import DropdownNotification from './DropdownNotification';
-import DropdownUser from './DropdownUser';
-import LogoIcon from '../../images/logo/logo-icon.svg';
-import DarkModeSwitcher from './DarkModeSwitcher';
-import { AuthContext } from '../../context/AuthContext';
-import { useContext } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import useColorMode from '../../hooks/useColorMode';
+import { usersApi, projectsApi, tasksApi } from '../../services/api';
 
-const Header = (props: {
-  sidebarOpen: string | boolean | undefined;
-  setSidebarOpen: (arg0: boolean) => void;
-}) => {
-  // Access the context and handle undefined
-  const authContext = useContext(AuthContext);
+interface HeaderProps {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+}
 
-  if (!authContext) {
-    return null;  // If context is not available, return null
-  }
+const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen }) => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [colorMode, setColorMode] = useColorMode();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<{ label: string; path: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
-  const { isAuthenticated } = authContext;
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowResults(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
-  if (!isAuthenticated) {
-    return null;  // Don't render the Navbar if the user is not authenticated
-  }
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); setShowResults(false); return; }
+    const timeout = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const [ur, pr, tr] = await Promise.allSettled([
+          usersApi.getAll(),
+          projectsApi.getAll(),
+          tasksApi.getAll(),
+        ]);
+        const items: { label: string; path: string }[] = [];
+        const q = query.toLowerCase();
+        if (ur.status === 'fulfilled') ur.value.data.filter(u => `${u.firstName} ${u.lastName}`.toLowerCase().includes(q)).slice(0, 3).forEach(u => items.push({ label: `User: ${u.firstName} ${u.lastName}`, path: '/users' }));
+        if (pr.status === 'fulfilled') pr.value.data.filter(p => p.name.toLowerCase().includes(q)).slice(0, 3).forEach(p => items.push({ label: `Project: ${p.name}`, path: '/projects' }));
+        if (tr.status === 'fulfilled') tr.value.data.filter(t => t.title.toLowerCase().includes(q)).slice(0, 3).forEach(t => items.push({ label: `Task: ${t.title}`, path: '/tasks' }));
+        setResults(items);
+        setShowResults(true);
+      } catch {}
+      finally { setSearching(false); }
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [query]);
+
+  const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '?';
+
   return (
-    <header className="sticky top-0 z-999 flex w-full bg-white drop-shadow-1 dark:bg-boxdark dark:drop-shadow-none">
+    <header className="sticky top-0 z-999 flex w-full bg-white dark:bg-boxdark drop-shadow-1 dark:drop-shadow-none">
       <div className="flex flex-grow items-center justify-between px-4 py-4 shadow-2 md:px-6 2xl:px-11">
+        {/* Left: hamburger */}
         <div className="flex items-center gap-2 sm:gap-4 lg:hidden">
-          {/* <!-- Hamburger Toggle BTN --> */}
-          <button
-            aria-controls="sidebar"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.setSidebarOpen(!props.sidebarOpen);
-            }}
-            className="z-99999 block rounded-sm border border-stroke bg-white p-1.5 shadow-sm dark:border-strokedark dark:bg-boxdark lg:hidden"
-          >
-            <span className="relative block h-5.5 w-5.5 cursor-pointer">
-              <span className="du-block absolute right-0 h-full w-full">
-                <span
-                  className={`relative left-0 top-0 my-1 block h-0.5 w-0 rounded-sm bg-black delay-[0] duration-200 ease-in-out dark:bg-white ${
-                    !props.sidebarOpen && '!w-full delay-300'
-                  }`}
-                ></span>
-                <span
-                  className={`relative left-0 top-0 my-1 block h-0.5 w-0 rounded-sm bg-black delay-150 duration-200 ease-in-out dark:bg-white ${
-                    !props.sidebarOpen && 'delay-400 !w-full'
-                  }`}
-                ></span>
-                <span
-                  className={`relative left-0 top-0 my-1 block h-0.5 w-0 rounded-sm bg-black delay-200 duration-200 ease-in-out dark:bg-white ${
-                    !props.sidebarOpen && '!w-full delay-500'
-                  }`}
-                ></span>
-              </span>
-              <span className="absolute right-0 h-full w-full rotate-45">
-                <span
-                  className={`absolute left-2.5 top-0 block h-full w-0.5 rounded-sm bg-black delay-300 duration-200 ease-in-out dark:bg-white ${
-                    !props.sidebarOpen && '!h-0 !delay-[0]'
-                  }`}
-                ></span>
-                <span
-                  className={`delay-400 absolute left-0 top-2.5 block h-0.5 w-full rounded-sm bg-black duration-200 ease-in-out dark:bg-white ${
-                    !props.sidebarOpen && '!h-0 !delay-200'
-                  }`}
-                ></span>
-              </span>
-            </span>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-controls="sidebar" className="z-99999 block rounded-sm border border-stroke bg-white p-1.5 shadow-sm dark:border-strokedark dark:bg-boxdark lg:hidden">
+            <Menu className="w-5 h-5 text-black dark:text-white" />
           </button>
-          {/* <!-- Hamburger Toggle BTN --> */}
+        </div>
 
-          <Link className="block flex-shrink-0 lg:hidden" to="/">
-            <img src={LogoIcon} alt="Logo" />
+        {/* Search */}
+        <div ref={searchRef} className="relative flex-1 max-w-md mx-4 hidden md:block">
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-meta-4 rounded-xl px-4 py-2.5">
+            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onFocus={() => results.length > 0 && setShowResults(true)}
+              placeholder="Search users, projects, tasks..."
+              className="flex-1 bg-transparent text-sm focus:outline-none text-black dark:text-white placeholder:text-gray-400"
+            />
+            {searching && <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />}
+          </div>
+          <AnimatePresence>
+            {showResults && results.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+                className="absolute top-full left-0 right-0 mt-1 rounded-xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-xl z-50 overflow-hidden">
+                {results.map((r, i) => (
+                  <button key={i} onClick={() => { navigate(r.path); setQuery(''); setShowResults(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-meta-4 transition-colors text-black dark:text-white border-b border-stroke dark:border-strokedark last:border-0">
+                    {r.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Right actions */}
+        <div className="flex items-center gap-3">
+          {/* Dark mode */}
+          <button onClick={() => setColorMode(colorMode === 'dark' ? 'light' : 'dark')}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-boxdark-2 transition-colors">
+            {colorMode === 'dark' ? <Sun className="w-5 h-5 text-white" /> : <Moon className="w-5 h-5 text-black" />}
+          </button>
+
+          {/* Notifications */}
+          <DropdownNotification />
+
+          {/* User avatar */}
+          <Link to="/profile" className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold hover:shadow-md transition-shadow" title={`${user?.firstName} ${user?.lastName}`}>
+            {initials}
           </Link>
-        </div>
-
-        <div className="hidden sm:block">
-          <form action="https://formbold.com/s/unique_form_id" method="POST">
-            <div className="relative">
-              <button className="absolute left-0 top-1/2 -translate-y-1/2">
-                <svg
-                  className="fill-body hover:fill-primary dark:fill-bodydark dark:hover:fill-primary"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                    d="M9.16666 3.33332C5.945 3.33332 3.33332 5.945 3.33332 9.16666C3.33332 12.3883 5.945 15 9.16666 15C12.3883 15 15 12.3883 15 9.16666C15 5.945 12.3883 3.33332 9.16666 3.33332ZM1.66666 9.16666C1.66666 5.02452 5.02452 1.66666 9.16666 1.66666C13.3088 1.66666 16.6667 5.02452 16.6667 9.16666C16.6667 13.3088 13.3088 16.6667 9.16666 16.6667C5.02452 16.6667 1.66666 13.3088 1.66666 9.16666Z"
-                    fill=""
-                  />
-                  <path
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                    d="M13.2857 13.2857C13.6112 12.9603 14.1388 12.9603 14.4642 13.2857L18.0892 16.9107C18.4147 17.2362 18.4147 17.7638 18.0892 18.0892C17.7638 18.4147 17.2362 18.4147 16.9107 18.0892L13.2857 14.4642C12.9603 14.1388 12.9603 13.6112 13.2857 13.2857Z"
-                    fill=""
-                  />
-                </svg>
-              </button>
-
-              <input
-                type="text"
-                placeholder="Type to search..."
-                className="w-full bg-transparent pl-9 pr-4 text-black focus:outline-none dark:text-white xl:w-125"
-              />
-            </div>
-          </form>
-        </div>
-
-        <div className="flex items-center gap-3 2xsm:gap-7">
-          <ul className="flex items-center gap-2 2xsm:gap-4">
-            {/* <!-- Dark Mode Toggler --> */}
-            <DarkModeSwitcher />
-            {/* <!-- Dark Mode Toggler --> */}
-
-            {/* <!-- Notification Menu Area --> */}
-            <DropdownNotification />
-            {/* <!-- Notification Menu Area --> */}
-
-            {/* <!-- Chat Notification Area --> */}
-          </ul>
-
-          {/* <!-- User Area --> */}
-          <DropdownUser />
-          {/* <!-- User Area --> */}
         </div>
       </div>
     </header>

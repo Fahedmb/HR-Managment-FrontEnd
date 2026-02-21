@@ -1,0 +1,81 @@
+[vite] connecting... client:733:9
+[vite] connected. client:827:12
+Uncaught Error: You cannot render a <Router> inside another <Router>. You should never have more than one in your app.
+    invariant history.ts:494
+    Router components.tsx:429
+    React 11
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+    js scheduler.development.js:571
+    js scheduler.development.js:633
+    __require chunk-G3PMV62Z.js:8
+    js index.js:6
+    __require chunk-G3PMV62Z.js:8
+    React 2
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    <anonymous> react-dom_client.js:38
+history.ts:494:11
+Uncaught Error: You cannot render a <Router> inside another <Router>. You should never have more than one in your app.
+    invariant history.ts:494
+    Router components.tsx:429
+    React 12
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+    js scheduler.development.js:571
+    js scheduler.development.js:633
+    __require chunk-G3PMV62Z.js:8
+    js index.js:6
+    __require chunk-G3PMV62Z.js:8
+    React 2
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    <anonymous> react-dom_client.js:38
+history.ts:494:11
+The above error occurred in the <Router> component:
+
+Router@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=65247a18:4550:7
+BrowserRouter@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=65247a18:5293:7
+QueryClientProvider@http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=65247a18:3102:27
+App
+Router@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=65247a18:4550:7
+BrowserRouter@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=65247a18:5293:7
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. <anonymous code>:1:147461
+Uncaught Error: You cannot render a <Router> inside another <Router>. You should never have more than one in your app.
+    invariant history.ts:494
+    Router components.tsx:429
+    React 9
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+    js scheduler.development.js:571
+    js scheduler.development.js:633
+    __require chunk-G3PMV62Z.js:8
+    js index.js:6
+    __require chunk-G3PMV62Z.js:8
+    React 2
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    js React
+    __require chunk-G3PMV62Z.js:8
+    <anonymous> react-dom_client.js:38
+history.ts:494:11
+Source map error: Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data
+Stack in the worker:parseSourceMapInput@resource://devtools/client/shared/vendor/source-map/lib/util.js:163:15
+_factory@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:1069:22
+SourceMapConsumer@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:26:12
+_fetch@resource://devtools/client/shared/source-map-loader/utils/fetchSourceMap.js:83:19
+
+Resource URL: http://localhost:5173/%3Canonymous%20code%3E
+Source Map URL: installHook.js.map[Learn Mor
