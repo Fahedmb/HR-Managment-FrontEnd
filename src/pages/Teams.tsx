@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Users, Crown, UserPlus, UserMinus, Edit2, Trash2, Download, Search } from 'lucide-react';
-import { teamsApi, usersApi } from '../services/api';
+import { teamsApi, usersApi, projectsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { Alert } from '../components/ui/Alert';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
-import type { Team, User } from '../types';
+import type { Team, User, Project } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const DEPT_OPTIONS = ['Engineering', 'Product', 'Design', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations'];
-const defaultForm = { name: '', description: '', department: '' };
+const defaultForm = { name: '', description: '', projectId: '' };
+const memberName = (m: { firstName: string; lastName: string }) => `${m.firstName} ${m.lastName}`;
 
 const Teams: React.FC = () => {
   const { user } = useAuth();
@@ -19,6 +19,7 @@ const Teams: React.FC = () => {
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [alert, setAlert] = useState<{ type: 'success' | 'danger'; msg: string } | null>(null);
@@ -34,25 +35,27 @@ const Teams: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const [teamsRes, usersRes] = await Promise.all([teamsApi.getAll(), usersApi.getAll()]);
+      const [teamsRes, usersRes, projectsRes] = await Promise.all([teamsApi.getAll(), usersApi.getAll(), projectsApi.getAll()]);
       setTeams(teamsRes.data);
       setAllUsers(usersRes.data);
+      setAllProjects(projectsRes.data);
     } catch { setAlert({ type: 'danger', msg: 'Failed to load teams.' }); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
 
-  const filtered = teams.filter(t => !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.department?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = teams.filter(t => !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.description?.toLowerCase().includes(search.toLowerCase()));
 
   const openCreate = () => { setEditTeam(null); setForm(defaultForm); setFormOpen(true); };
-  const openEdit = (t: Team) => { setEditTeam(t); setForm({ name: t.name, description: t.description || '', department: t.department || '' }); setFormOpen(true); };
+  const openEdit = (t: Team) => { setEditTeam(t); setForm({ name: t.name, description: t.description || '', projectId: t.projectId ? String(t.projectId) : '' }); setFormOpen(true); };
 
   const handleSave = async () => {
+    if (!form.projectId) { setAlert({ type: 'danger', msg: 'Please select a project for this team.' }); return; }
     try {
-      const payload = { ...form, leaderId: editTeam?.leaderId };
+      const payload = { name: form.name, description: form.description, projectId: Number(form.projectId), ...(editTeam ? { teamLeaderId: editTeam.teamLeaderId } : {}) };
       if (editTeam) { await teamsApi.update(editTeam.id, payload); setAlert({ type: 'success', msg: 'Team updated.' }); }
-      else { await teamsApi.create(payload); setAlert({ type: 'success', msg: 'Team created.' }); }
+      else { await teamsApi.create(user!.id, payload); setAlert({ type: 'success', msg: 'Team created.' }); }
       setFormOpen(false); load();
     } catch { setAlert({ type: 'danger', msg: 'Failed to save team.' }); }
   };
@@ -75,7 +78,7 @@ const Teams: React.FC = () => {
 
   const handleSetLeader = async () => {
     if (!leaderModalTeam || !newLeaderId) return;
-    try { await teamsApi.setLeader(leaderModalTeam.id, Number(newLeaderId)); setLeaderModalTeam(null); load(); setAlert({ type: 'success', msg: 'Team leader updated.' }); }
+    try { await teamsApi.assignLeader(leaderModalTeam.id, Number(newLeaderId)); setLeaderModalTeam(null); load(); setAlert({ type: 'success', msg: 'Team leader updated.' }); }
     catch { setAlert({ type: 'danger', msg: 'Failed to update leader.' }); }
   };
 
@@ -86,7 +89,7 @@ const Teams: React.FC = () => {
     autoTable(doc, {
       startY: 33,
       head: [['Team', 'Department', 'Leader', 'Members']],
-      body: filtered.map(t => [t.name, t.department || '—', t.leaderName || '—', String(t.members?.length ?? 0)]),
+      body: filtered.map(t => [t.name, t.projectName || '—', t.teamLeaderName || '—', String(t.members?.length ?? 0)]),
       headStyles: { fillColor: [30, 64, 175] }, styles: { fontSize: 9 },
     });
     doc.save('HRPRO-Teams.pdf');
@@ -137,7 +140,7 @@ const Teams: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-lg text-black dark:text-white">{team.name}</h3>
-                      {team.department && <p className="text-sm text-gray-400 mt-0.5">{team.department}</p>}
+                      {team.projectName && <p className="text-sm text-gray-400 mt-0.5">{team.projectName}</p>}
                     </div>
                     {isHR && (
                       <div className="flex items-center gap-1">
@@ -149,10 +152,10 @@ const Teams: React.FC = () => {
                   {team.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">{team.description}</p>}
 
                   {/* Leader */}
-                  {team.leaderName && (
+                  {team.teamLeaderName && (
                     <div className="flex items-center gap-2 mt-3 text-sm">
                       <Crown className="w-4 h-4 text-amber-500" />
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{team.leaderName}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">{team.teamLeaderName}</span>
                       {isHR && <button onClick={() => { setLeaderModalTeam(team); setNewLeaderId(''); }} className="text-xs text-gray-400 hover:text-primary underline">Change</button>}
                     </div>
                   )}
@@ -161,8 +164,8 @@ const Teams: React.FC = () => {
                   <div className="flex items-center gap-2 mt-3">
                     <div className="flex -space-x-2">
                       {(team.members ?? []).slice(0, 5).map(m => (
-                        <div key={m.userId} title={m.fullName} className={`w-8 h-8 rounded-full ${teamColor(m.userId)} text-white text-xs flex items-center justify-center border-2 border-white dark:border-boxdark font-medium`}>
-                          {getAvatarLetters(m.fullName)}
+                        <div key={m.userId} title={memberName(m)} className={`w-8 h-8 rounded-full ${teamColor(m.userId)} text-white text-xs flex items-center justify-center border-2 border-white dark:border-boxdark font-medium`}>
+                          {getAvatarLetters(memberName(m))}
                         </div>
                       ))}
                       {(team.members?.length ?? 0) > 5 && <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-meta-4 text-xs flex items-center justify-center border-2 border-white dark:border-boxdark font-medium text-gray-600">+{team.members!.length - 5}</div>}
@@ -190,7 +193,7 @@ const Teams: React.FC = () => {
       }>
         <div className="space-y-3">
           <div><label className="block text-sm font-medium mb-1">Name</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent focus:outline-none focus:ring-2 focus:ring-primary text-sm" /></div>
-          <div><label className="block text-sm font-medium mb-1">Department</label><select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-sm focus:outline-none focus:ring-2 focus:ring-primary"><option value="">Select...</option>{DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div><label className="block text-sm font-medium mb-1">Project <span className="text-red-500">*</span></label><select value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-sm focus:outline-none focus:ring-2 focus:ring-primary"><option value="">Select a project...</option>{allProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
           <div><label className="block text-sm font-medium mb-1">Description</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent focus:outline-none focus:ring-2 focus:ring-primary text-sm resize-none" /></div>
         </div>
       </Modal>
@@ -201,9 +204,9 @@ const Teams: React.FC = () => {
           {(membersTeamData?.members ?? []).map(m => (
             <div key={m.userId} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 dark:bg-meta-4">
               <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-full ${teamColor(m.userId)} text-white text-xs flex items-center justify-center font-medium`}>{getAvatarLetters(m.fullName)}</div>
-                <span className="text-sm font-medium text-black dark:text-white">{m.fullName}</span>
-                {m.userId === membersTeamData?.leaderId && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                <div className={`w-7 h-7 rounded-full ${teamColor(m.userId)} text-white text-xs flex items-center justify-center font-medium`}>{getAvatarLetters(memberName(m))}</div>
+                <span className="text-sm font-medium text-black dark:text-white">{memberName(m)}</span>
+                {m.userId === membersTeamData?.teamLeaderId && <Crown className="w-3.5 h-3.5 text-amber-500" />}
               </div>
               <button onClick={() => handleRemoveMember(membersTeamData!.id, m.userId)} className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-boxdark text-gray-400 hover:text-red-500 transition-colors"><UserMinus className="w-4 h-4" /></button>
             </div>
@@ -222,7 +225,7 @@ const Teams: React.FC = () => {
       }>
         <select value={newLeaderId} onChange={e => setNewLeaderId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-sm focus:outline-none focus:ring-2 focus:ring-primary">
           <option value="">Select new leader...</option>
-          {(leaderModalTeam?.members ?? []).map(m => <option key={m.userId} value={m.userId}>{m.fullName}</option>)}
+          {(leaderModalTeam?.members ?? []).map(m => <option key={m.userId} value={m.userId}>{memberName(m)}</option>)}
         </select>
       </Modal>
 

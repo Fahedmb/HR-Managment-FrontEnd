@@ -1,311 +1,277 @@
-// Calendar.tsx (No comments)
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon,
+  Video, Briefcase, CheckSquare, CalendarRange, Filter, X
+} from 'lucide-react';
+import { meetingsApi, leaveApi, projectsApi, tasksApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
+import {
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays,
+  isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths
+} from 'date-fns';
 
-type User = {
-  id?: number;
-  firstName?: string;
-  lastName?: string;
-};
+type EventType = 'MEETING' | 'LEAVE' | 'DEADLINE' | 'TASK';
 
-type CalendarEvent = {
+interface CalEvent {
   id: number;
-  date: string;
-  type: 'TIMESHEET' | 'LEAVE';
-  status: string;
-  hoursWorked?: number;
-  reason?: string;
+  type: EventType;
+  title: string;
+  date: Date;
+  endDate?: Date;
+  status?: string;
+  color: string;
+  bg: string;
+}
+
+const TYPE_META: Record<EventType, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  MEETING:  { label: 'Meeting',  color: 'text-blue-700',   bg: 'bg-blue-100',   icon: <Video className="w-3.5 h-3.5" /> },
+  LEAVE:    { label: 'Leave',    color: 'text-amber-700',  bg: 'bg-amber-100',  icon: <CalendarRange className="w-3.5 h-3.5" /> },
+  DEADLINE: { label: 'Deadline', color: 'text-red-700',    bg: 'bg-red-100',    icon: <Briefcase className="w-3.5 h-3.5" /> },
+  TASK:     { label: 'Task Due', color: 'text-purple-700', bg: 'bg-purple-100', icon: <CheckSquare className="w-3.5 h-3.5" /> },
 };
+
+const ALL_TYPES: EventType[] = ['MEETING', 'LEAVE', 'DEADLINE', 'TASK'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const Calendar: React.FC = () => {
-  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [schedule, setSchedule] = useState<any>(null);
+  const { user } = useAuth();
+  const [month, setMonth] = useState(new Date());
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeFilters, setActiveFilters] = useState<Set<EventType>>(new Set(ALL_TYPES));
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-      } catch {}
-    }
-  }, []);
+    if (!user) return;
+    setLoading(true);
 
-  useEffect(() => {
-    if (!user || !user.id) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
+    Promise.all([
+      meetingsApi.getAll().catch(() => ({ data: [] })),
+      (user.role === 'HR' ? leaveApi.getAll() : leaveApi.getByUser(user.id)).catch(() => ({ data: [] })),
+      projectsApi.getAll().catch(() => ({ data: [] })),
+      tasksApi.getByAssignee(user.id).catch(() => ({ data: [] })),
+    ]).then(([meetRes, leaveRes, projRes, taskRes]) => {
+      const result: CalEvent[] = [];
 
-    const fetchSchedule = async () => {
-      try {
-        const res = await axios.get(`http://localhost:9090/api/timesheet-schedules/user/${user.id}`, { headers });
-        setSchedule(res.data);
-      } catch {}
-    };
+      // Meetings
+      for (const m of (meetRes.data as any[])) {
+        try {
+          const d = parseISO(m.startTime ?? m.date);
+          result.push({
+            id: m.id, type: 'MEETING', title: m.title, date: d,
+            endDate: m.endTime ? parseISO(m.endTime) : undefined,
+            status: m.status, color: TYPE_META.MEETING.color, bg: TYPE_META.MEETING.bg,
+          });
+        } catch {}
+      }
 
-    const fetchData = async () => {
-      try {
-        const tsResponse = await axios.get(`http://localhost:9090/api/time-sheets/user/${user.id}`, { headers });
-        const allTimesheets: CalendarEvent[] = tsResponse.data.map((ts: any) => ({
-          id: ts.id,
-          date: ts.date,
-          type: 'TIMESHEET',
-          status: ts.status,
-          hoursWorked: ts.hoursWorked
-        }));
-
-        const lrResponse = await axios.get(`http://localhost:9090/api/leave-requests/user/${user.id}`, { headers });
-        const allLeaves: CalendarEvent[] = [];
-        for (const lr of lrResponse.data) {
-          const start = new Date(lr.startDate);
-          const end = new Date(lr.endDate);
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const dateStr = `${year}-${month}-${day}`;
-            allLeaves.push({
-              id: lr.id,
-              date: dateStr,
-              type: 'LEAVE',
-              status: lr.status,
-              reason: lr.reason
+      // Leave requests — expand each request into daily events
+      for (const lr of (leaveRes.data as any[])) {
+        if (lr.status === 'REJECTED' || lr.status === 'CANCELLED') continue;
+        try {
+          const start = parseISO(lr.startDate);
+          const end = parseISO(lr.endDate);
+          const label = `${lr.type}${user.role === 'HR' && lr.firstName ? ` — ${lr.firstName} ${lr.lastName}` : ''}`;
+          for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
+            result.push({
+              id: lr.id, type: 'LEAVE', title: label, date: new Date(d),
+              status: lr.status, color: TYPE_META.LEAVE.color, bg: TYPE_META.LEAVE.bg,
             });
           }
-        }
-
-        const filteredEvents = [...allTimesheets, ...allLeaves].filter(ev => {
-          const evDate = new Date(ev.date);
-          return evDate.getMonth() === currentMonth && evDate.getFullYear() === currentYear;
-        });
-
-        setEvents(filteredEvents);
-      } catch {}
-    };
-
-    fetchSchedule().then(() => fetchData());
-  }, [currentMonth, currentYear, user]);
-
-  const daysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const generateCalendarDays = () => {
-    const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-    const startDay = firstDayOfMonth.getDay();
-    const totalDays = daysInMonth(currentMonth, currentYear);
-    const calendarCells: (number | null)[] = [];
-    for (let i = 0; i < startDay; i++) {
-      calendarCells.push(null);
-    }
-    for (let day = 1; day <= totalDays; day++) {
-      calendarCells.push(day);
-    }
-    return calendarCells;
-  };
-
-  const calendarCells = generateCalendarDays();
-
-  const rows = [];
-  for (let i = 0; i < calendarCells.length; i += 7) {
-    rows.push(calendarCells.slice(i, i + 7));
-  }
-
-  const getEventsForDay = (day: number | null): CalendarEvent[] => {
-    if (!day) return [];
-    const dateStr = `${currentYear}-${String(currentMonth+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter(ev => ev.date === dateStr);
-  };
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
-  const goToPreviousMonth = () => {
-    let newMonth = currentMonth - 1;
-    let newYear = currentYear;
-    if (newMonth < 0) {
-      newMonth = 11;
-      newYear = currentYear - 1;
-    }
-    setCurrentMonth(newMonth);
-    setCurrentYear(newYear);
-  };
-
-  const goToNextMonth = () => {
-    let newMonth = currentMonth + 1;
-    let newYear = currentYear;
-    if (newMonth > 11) {
-      newMonth = 0;
-      newYear = currentYear + 1;
-    }
-    setCurrentMonth(newMonth);
-    setCurrentYear(newYear);
-  };
-
-  const getEventBorderColor = (event: CalendarEvent) => {
-    if (event.type === 'TIMESHEET') {
-      return 'border-primary';
-    } else if (event.type === 'LEAVE') {
-      if (event.status === 'PENDING') {
-        return 'border-yellow-500';
-      } else if (event.status === 'APPROVED') {
-        return 'border-green-500';
-      } else if (event.status === 'REJECTED') {
-        return 'border-red-500';
-      } else {
-        return 'border-stroke';
+        } catch {}
       }
-    }
-    return 'border-stroke';
-  };
 
-  const getWeekdayForDay = (day: number) => {
-    const date = new Date(currentYear, currentMonth, day);
-    const weekdayIndex = date.getDay();
-    const mapping = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-    return mapping[weekdayIndex];
-  };
+      // Project deadlines
+      for (const p of (projRes.data as any[])) {
+        if (!p.deadline) continue;
+        try {
+          result.push({
+            id: p.id, type: 'DEADLINE', title: p.name, date: parseISO(p.deadline),
+            status: p.status, color: TYPE_META.DEADLINE.color, bg: TYPE_META.DEADLINE.bg,
+          });
+        } catch {}
+      }
 
-  let scheduleCreationDate: Date | null = null;
-  if (schedule && schedule.createdAt) {
-    scheduleCreationDate = new Date(schedule.createdAt);
-  }
+      // Task due dates
+      for (const t of (taskRes.data as any[])) {
+        if (!t.dueDate) continue;
+        try {
+          result.push({
+            id: t.id, type: 'TASK', title: t.title, date: parseISO(t.dueDate),
+            status: t.status, color: TYPE_META.TASK.color, bg: TYPE_META.TASK.bg,
+          });
+        } catch {}
+      }
 
-  const showWorkLabelForDay = (day: number) => {
-    if (!schedule || !schedule.chosenDays) return false;
-    const weekday = getWeekdayForDay(day);
-    if (!schedule.chosenDays.includes(weekday)) return false;
-    if (!scheduleCreationDate) return false;
-    const currentDate = new Date(currentYear, currentMonth, day);
-    return currentDate >= scheduleCreationDate;
-  };
+      setEvents(result);
+      setLoading(false);
+    });
+  }, [user]);
+
+  const eventsForDay = (day: Date) =>
+    events.filter(e => activeFilters.has(e.type) && isSameDay(e.date, day));
+
+  const monthEventsCount = useMemo(() =>
+    events.filter(e => activeFilters.has(e.type) && isSameMonth(e.date, month)).length,
+    [events, activeFilters, month]
+  );
+
+  // Build calendar grid (6 rows × 7 cols)
+  const gridStart = startOfWeek(startOfMonth(month));
+  const gridEnd = endOfWeek(endOfMonth(month));
+  const days: Date[] = [];
+  for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) days.push(new Date(d));
+
+  const toggleFilter = (t: EventType) =>
+    setActiveFilters(prev => { const s = new Set(prev); s.has(t) ? s.delete(t) : s.add(t); return s; });
+
+  const selectedDayEvents = selectedDay ? eventsForDay(selectedDay) : [];
 
   return (
     <>
       <Breadcrumb pageName="Calendar" />
-      <div className="mb-4 flex items-center justify-between">
-        <button
-          onClick={goToPreviousMonth}
-          className="rounded border border-stroke bg-white py-2 px-4 text-sm font-medium hover:bg-gray dark:border-strokedark dark:bg-boxdark dark:text-white dark:hover:bg-meta-4"
-        >
-          Prev
-        </button>
-        <h2 className="text-xl font-semibold text-black dark:text-white">
-          {monthNames[currentMonth]} {currentYear}
-        </h2>
-        <button
-          onClick={goToNextMonth}
-          className="rounded border border-stroke bg-white py-2 px-4 text-sm font-medium hover:bg-gray dark:border-strokedark dark:bg-boxdark dark:text-white dark:hover:bg-meta-4"
-        >
-          Next
-        </button>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <span className="flex items-center gap-1 text-xs text-gray-400 font-medium"><Filter className="w-3.5 h-3.5" />Filter:</span>
+        {ALL_TYPES.map(t => {
+          const { label, color, bg, icon } = TYPE_META[t];
+          const active = activeFilters.has(t);
+          return (
+            <button key={t} onClick={() => toggleFilter(t)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all select-none
+                ${active ? `${bg} ${color} border-transparent` : 'bg-white dark:bg-boxdark text-gray-400 border-stroke dark:border-strokedark opacity-50'}`}>
+              {icon}{label}
+            </button>
+          );
+        })}
+        <span className="ml-auto text-xs text-gray-400 font-medium">{monthEventsCount} event{monthEventsCount !== 1 ? 's' : ''} this month</span>
       </div>
 
-      <div className="w-full max-w-full rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-        <table className="w-full">
-          <thead>
-          <tr className="grid grid-cols-7 rounded-t-sm bg-primary text-white">
-            <th className="flex h-15 items-center justify-center rounded-tl-sm p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Sunday</span>
-              <span className="block lg:hidden">Sun</span>
-            </th>
-            <th className="flex h-15 items-center justify-center p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Monday</span>
-              <span className="block lg:hidden">Mon</span>
-            </th>
-            <th className="flex h-15 items-center justify-center p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Tuesday</span>
-              <span className="block lg:hidden">Tue</span>
-            </th>
-            <th className="flex h-15 items-center justify-center p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Wednesday</span>
-              <span className="block lg:hidden">Wed</span>
-            </th>
-            <th className="flex h-15 items-center justify-center p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Thursday</span>
-              <span className="block lg:hidden">Thur</span>
-            </th>
-            <th className="flex h-15 items-center justify-center p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Friday</span>
-              <span className="block lg:hidden">Fri</span>
-            </th>
-            <th className="flex h-15 items-center justify-center rounded-tr-sm p-1 text-xs font-semibold sm:text-base xl:p-5">
-              <span className="hidden lg:block">Saturday</span>
-              <span className="block lg:hidden">Sat</span>
-            </th>
-          </tr>
-          </thead>
-          <tbody>
-          {rows.map((week, rowIndex) => (
-            <tr className="grid grid-cols-7" key={rowIndex}>
-              {week.map((day, dayIndex) => {
-                const dayEvents = getEventsForDay(day);
-                return (
-                  <td
-                    key={dayIndex}
-                    className="ease relative h-20 cursor-pointer border border-stroke p-2 transition duration-500 hover:bg-gray dark:border-strokedark dark:hover:bg-meta-4 md:h-25 md:p-6 xl:h-31"
-                  >
-                    {day && (
-                      <span className="font-medium text-black dark:text-white">
-                          {day}
-                        {showWorkLabelForDay(day) && (
-                          <span className={`ml-2 text-xs font-semibold ${schedule.status === 'APPROVED' ? 'text-green-500' : schedule.status === 'PENDING' ? 'text-yellow-500' : schedule.status === 'PENDING_DELETION' ? 'text-yellow-500' : ''}`}>
-                              Work{schedule.status === 'PENDING' ? ' (Pending)' : schedule.status === 'PENDING_DELETION' ? ' (Pending Deletion)' : ''}
-                            </span>
-                        )}
-                        </span>
+      {/* Calendar */}
+      <div className="rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-sm overflow-hidden">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stroke dark:border-strokedark">
+          <button onClick={() => setMonth(m => subMonths(m, 1))}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors">
+            <ChevronLeft className="w-5 h-5 text-gray-500" />
+          </button>
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-semibold text-black dark:text-white">
+              {format(month, 'MMMM yyyy')}
+            </h2>
+            <button onClick={() => { const t = new Date(); setMonth(t); setSelectedDay(t); }}
+              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+              Today
+            </button>
+          </div>
+          <button onClick={() => setMonth(m => addMonths(m, 1))}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors">
+            <ChevronRight className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 border-b border-stroke dark:border-strokedark">
+          {WEEKDAYS.map(d => (
+            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">{d}</div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-24">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 divide-x divide-y divide-stroke dark:divide-strokedark">
+            {days.map(day => {
+              const dayEvts = eventsForDay(day);
+              const inMonth = isSameMonth(day, month);
+              const isSelected = selectedDay && isSameDay(day, selectedDay);
+              const today = isToday(day);
+
+              return (
+                <div key={day.toISOString()} onClick={() => setSelectedDay(isSelected ? null : day)}
+                  className={`min-h-[88px] p-1.5 cursor-pointer transition-colors select-none
+                    ${inMonth ? 'bg-white dark:bg-boxdark' : 'bg-gray-50/60 dark:bg-boxdark-2'}
+                    ${isSelected ? 'ring-2 ring-inset ring-primary' : 'hover:bg-blue-50/60 dark:hover:bg-meta-4'}`}>
+                  <div className={`w-7 h-7 flex items-center justify-center mx-auto rounded-full text-sm mb-1 font-medium
+                    ${today ? 'bg-primary text-white font-bold'
+                    : inMonth ? 'text-black dark:text-white'
+                    : 'text-gray-300 dark:text-gray-600'}`}>
+                    {format(day, 'd')}
+                  </div>
+                  <div className="space-y-0.5">
+                    {dayEvts.slice(0, 3).map((e, i) => (
+                      <div key={`${e.type}-${e.id}-${i}`}
+                        className={`flex items-center gap-1 px-1 py-0.5 rounded text-[11px] leading-tight truncate ${e.bg} ${e.color}`}>
+                        {TYPE_META[e.type].icon}
+                        <span className="truncate">{e.title}</span>
+                      </div>
+                    ))}
+                    {dayEvts.length > 3 && (
+                      <div className="text-[11px] text-gray-400 text-center leading-tight">+{dayEvts.length - 3} more</div>
                     )}
-                    {dayEvents.length > 0 && (
-                      <div className="group h-16 w-full flex-grow cursor-pointer py-1 md:h-30 relative">
-                        <span className="group-hover:text-primary md:hidden">More</span>
-                        <div
-                          className="event invisible absolute left-2 z-99 mb-1 flex w-[200%] flex-col rounded-sm px-3 py-1 text-left opacity-0 group-hover:visible group-hover:opacity-100 dark:bg-meta-4 md:visible md:w-[190%] md:opacity-100 bg-gray"
-                          style={{ transition: 'opacity 0.2s' }}
-                        >
-                          {dayEvents.map(ev => {
-                            const borderColor = getEventBorderColor(ev);
-                            return (
-                              <div key={ev.id} className={`mb-1 border-l-4 pl-2 ${borderColor}`}>
-                                {ev.type === 'TIMESHEET' ? (
-                                  <>
-                                      <span className="event-name text-sm font-semibold text-black dark:text-white block">
-                                        Hours: {ev.hoursWorked}
-                                      </span>
-                                    <span className="time text-sm font-medium text-black dark:text-white block">
-                                        Status: {ev.status}
-                                      </span>
-                                  </>
-                                ) : (
-                                  <>
-                                      <span className="event-name text-sm font-semibold text-black dark:text-white block">
-                                        Reason: {ev.reason}
-                                      </span>
-                                    <span className="time text-sm font-medium text-black dark:text-white block">
-                                        Status: {ev.status}
-                                      </span>
-                                  </>
-                                )}
-                              </div>
-                            );
-                          })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Selected day detail panel */}
+      <AnimatePresence>
+        {selectedDay && (
+          <motion.div key="day-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+            className="mt-4 rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-black dark:text-white">
+                  {format(selectedDay, 'EEEE, MMMM d, yyyy')}
+                </span>
+              </div>
+              <button onClick={() => setSelectedDay(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-meta-4 text-gray-400 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {selectedDayEvents.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-6">No events on this day.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedDayEvents.map((e, i) => {
+                  const meta = TYPE_META[e.type];
+                  return (
+                    <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl ${meta.bg}`}>
+                      <div className={`flex-shrink-0 ${meta.color}`}>{meta.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${meta.color}`}>{e.title}</p>
+                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                          {e.endDate && (
+                            <span className="text-xs text-gray-500">
+                              {format(e.date, 'HH:mm')} – {format(e.endDate, 'HH:mm')}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-400">{meta.label}</span>
+                          {e.status && <span className="text-xs text-gray-400">· {e.status}</span>}
                         </div>
                       </div>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          </tbody>
-        </table>
-      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 };

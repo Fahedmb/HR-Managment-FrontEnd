@@ -33,10 +33,10 @@ const DropdownNotification: React.FC = () => {
                 <p className="text-center text-sm text-gray-400 py-8">No notifications</p>
               ) : notifications.slice(0, 10).map(n => (
                 <div key={n.id} onClick={() => markRead(n.id)}
-                  className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-meta-4 transition-colors ${!n.isRead ? 'bg-blue-50 dark:bg-meta-4' : ''}`}>
-                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.isRead ? 'bg-gray-300' : 'bg-blue-500'}`} />
+                  className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-meta-4 transition-colors ${!n.read ? 'bg-blue-50 dark:bg-meta-4' : ''}`}>
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.read ? 'bg-gray-300' : 'bg-blue-500'}`} />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!n.isRead ? 'font-medium text-black dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{n.message}</p>
+                    <p className={`text-sm ${!n.read ? 'font-medium text-black dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{n.message}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{n.createdAt ? format(new Date(n.createdAt), 'MMM d, h:mm a') : ''}</p>
                   </div>
                 </div>

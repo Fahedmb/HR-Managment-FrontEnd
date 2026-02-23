@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckSquare, Clock, AlertTriangle, Filter, Download, Edit2, Trash2, MessageSquare } from 'lucide-react';
+import { Plus, AlertTriangle, Download, Edit2, Trash2, MessageSquare } from 'lucide-react';
 import { tasksApi, projectsApi, usersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';

@@ -11,9 +11,9 @@ import { format, differenceInDays } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const LEAVE_TYPES: LeaveType[] = ['ANNUAL', 'SICK', 'MATERNITY', 'PATERNITY', 'UNPAID', 'EMERGENCY', 'BEREAVEMENT'];
+const LEAVE_TYPES: LeaveType[] = ['VACATION', 'SICK', 'PERSONAL', 'MATERNITY', 'PATERNITY', 'EMERGENCY', 'UNPAID', 'OTHER'];
 const STATUSES: LeaveStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'];
-const defaultForm = { leaveType: 'ANNUAL' as LeaveType, startDate: '', endDate: '', reason: '', isHalfDay: false };
+const defaultForm = { leaveType: 'VACATION' as LeaveType, startDate: '', endDate: '', reason: '', halfDay: false };
 
 const LeaveRequests: React.FC = () => {
   const { user } = useAuth();
@@ -34,11 +34,11 @@ const LeaveRequests: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const endpoint = isHR ? leaveApi.getAll() : leaveApi.getMyRequests(user!.id);
+      const endpoint = isHR ? leaveApi.getAll() : leaveApi.getByUser(user!.id);
       const [reqRes] = await Promise.all([endpoint]);
       setRequests(reqRes.data);
       if (!isHR) {
-        leaveApi.getBalance(user!.id).then(r => setBalance(r.data)).catch(() => {});
+        leaveApi.getBalance().then(r => setBalance(r.data)).catch(() => {});
       }
     } catch { setAlert({ type: 'danger', msg: 'Failed to load.' }); }
     finally { setLoading(false); }
@@ -51,22 +51,22 @@ const LeaveRequests: React.FC = () => {
   const handleSubmit = async () => {
     if (!form.startDate || !form.endDate) { setAlert({ type: 'danger', msg: 'Please fill all required fields.' }); return; }
     try {
-      await leaveApi.create({ ...form, employeeId: user!.id });
+      await leaveApi.create({ type: form.leaveType, startDate: form.startDate, endDate: form.endDate, reason: form.reason, halfDay: form.halfDay, userId: user!.id });
       setAlert({ type: 'success', msg: 'Leave request submitted.' });
       setFormOpen(false); load();
     } catch { setAlert({ type: 'danger', msg: 'Failed to submit request.' }); }
   };
 
   const handleCancel = async (id: number) => {
-    try { await leaveApi.cancel(id); setAlert({ type: 'success', msg: 'Request cancelled.' }); load(); }
+    try { await leaveApi.cancel(id, 'Cancelled by employee'); setAlert({ type: 'success', msg: 'Request cancelled.' }); load(); }
     catch { setAlert({ type: 'danger', msg: 'Failed to cancel.' }); }
   };
 
   const handleReview = async (action: 'approve' | 'reject') => {
     if (!reviewModal) return;
     try {
-      if (action === 'approve') await leaveApi.approve(reviewModal.id, reviewComment);
-      else await leaveApi.reject(reviewModal.id, reviewComment);
+      if (action === 'approve') await leaveApi.updateStatus(reviewModal.id, 'APPROVED', user!.id, reviewComment);
+      else await leaveApi.updateStatus(reviewModal.id, 'REJECTED', user!.id, reviewComment);
       setAlert({ type: 'success', msg: `Request ${action}d.` });
       setReviewModal(null); setReviewComment(''); setReviewAction(null); load();
     } catch { setAlert({ type: 'danger', msg: `Failed to ${action} request.` }); }
@@ -79,7 +79,7 @@ const LeaveRequests: React.FC = () => {
     autoTable(doc, {
       startY: 33,
       head: [['Employee', 'Type', 'Start', 'End', 'Days', 'Status', 'Reason']],
-      body: filtered.map(r => [r.employeeName || '—', r.leaveType, r.startDate, r.endDate, String(differenceInDays(new Date(r.endDate), new Date(r.startDate)) + 1), r.status, r.reason || '—']),
+      body: filtered.map(r => [`${r.firstName} ${r.lastName}`, r.type, r.startDate, r.endDate, String(differenceInDays(new Date(r.endDate), new Date(r.startDate)) + 1), r.status, r.reason || '—']),
       headStyles: { fillColor: [30, 64, 175] }, styles: { fontSize: 8 },
     });
     doc.save('HRPRO-LeaveRequests.pdf');
@@ -134,17 +134,17 @@ const LeaveRequests: React.FC = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {isHR && <span className="font-semibold text-black dark:text-white">{r.employeeName}</span>}
-                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">{r.leaveType}</span>
+                      {isHR && <span className="font-semibold text-black dark:text-white">{r.firstName} {r.lastName}</span>}
+                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">{r.type}</span>
                       <StatusBadge status={r.status} />
                     </div>
                     <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
                       <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{format(new Date(r.startDate), 'MMM d')} → {format(new Date(r.endDate), 'MMM d, yyyy')}</span>
                       <span className="font-medium text-black dark:text-white">{days(r.startDate, r.endDate)} day{days(r.startDate, r.endDate) !== 1 ? 's' : ''}</span>
-                      {r.isHalfDay && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Half Day</span>}
+                      {r.halfDay && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Half Day</span>}
                     </div>
                     {r.reason && <p className="text-sm text-gray-400 mt-1 flex items-start gap-1"><Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{r.reason}</p>}
-                    {r.reviewComment && <p className="text-sm mt-1 italic text-gray-500">Review note: {r.reviewComment}</p>}
+                    {r.approverComment && <p className="text-sm mt-1 italic text-gray-500">Review note: {r.approverComment}</p>}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {isHR && r.status === 'PENDING' && (
@@ -176,7 +176,7 @@ const LeaveRequests: React.FC = () => {
             <div><label className="block text-sm font-medium mb-1">End Date</label><input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
           </div>
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="halfDay" checked={form.isHalfDay} onChange={e => setForm(f => ({ ...f, isHalfDay: e.target.checked }))} className="rounded border-stroke text-primary focus:ring-primary" />
+            <input type="checkbox" id="halfDay" checked={form.halfDay} onChange={e => setForm(f => ({ ...f, halfDay: e.target.checked }))} className="rounded border-stroke text-primary focus:ring-primary" />
             <label htmlFor="halfDay" className="text-sm">Half Day</label>
           </div>
           <div><label className="block text-sm font-medium mb-1">Reason</label><textarea value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} rows={3} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Optional reason..." /></div>
@@ -191,8 +191,8 @@ const LeaveRequests: React.FC = () => {
         <div>
           {reviewModal && (
             <div className="mb-3 p-3 rounded-xl bg-gray-50 dark:bg-meta-4 text-sm">
-              <p><span className="font-medium">Employee: </span>{reviewModal.employeeName}</p>
-              <p><span className="font-medium">Type: </span>{reviewModal.leaveType}</p>
+              <p><span className="font-medium">Employee: </span>{reviewModal.firstName} {reviewModal.lastName}</p>
+              <p><span className="font-medium">Type: </span>{reviewModal.type}</p>
               <p><span className="font-medium">Period: </span>{reviewModal.startDate} → {reviewModal.endDate}</p>
             </div>
           )}

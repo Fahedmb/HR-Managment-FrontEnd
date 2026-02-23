@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 
 const Chat: React.FC = () => {
   const { user } = useAuth();
-  const { sendMessage: wsSend, setOnMessage } = useChatSocket();
+  const { connect, disconnect } = useChatSocket();
 
   const [contacts, setContacts] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -18,23 +18,34 @@ const Chat: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Keep a ref so the stable WebSocket callback can read the current selected user
+  const selectedUserRef = useRef<User | null>(null);
 
   useEffect(() => {
     usersApi.getAll().then(r => setContacts(r.data.filter(u => u.id !== user!.id))).catch(() => {});
   }, []);
 
+  // Connect WebSocket once; use ref to handle incoming messages for current conversation
   useEffect(() => {
-    setOnMessage((msg: ChatMessage) => {
-      if ((msg.senderId === selectedUser?.id && msg.receiverId === user!.id) ||
-          (msg.senderId === user!.id && msg.receiverId === selectedUser?.id)) {
+    connect((msg: ChatMessage) => {
+      const sel = selectedUserRef.current;
+      if (
+        sel &&
+        ((msg.senderId === sel.id && msg.recipientId === user!.id) ||
+          (msg.senderId === user!.id && msg.recipientId === sel.id))
+      ) {
         setMessages(prev => [...prev, msg]);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
       }
     });
-  }, [selectedUser]);
+    return () => disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadMessages = async (contact: User) => {
-    setSelectedUser(contact); setLoadingMsgs(true);
+    setSelectedUser(contact);
+    selectedUserRef.current = contact;
+    setLoadingMsgs(true);
     try {
       const r = await chatApi.getConversation(user!.id, contact.id);
       setMessages(r.data);
@@ -45,11 +56,10 @@ const Chat: React.FC = () => {
 
   const handleSend = async () => {
     if (!text.trim() || !selectedUser) return;
-    const msg = { senderId: user!.id, receiverId: selectedUser.id, content: text.trim() };
+    const content = text.trim();
     setText('');
     try {
-      wsSend(msg);
-      const r = await chatApi.sendMessage({ senderId: user!.id, receiverId: selectedUser.id, content: msg.content });
+      const r = await chatApi.send({ senderId: user!.id, recipientId: selectedUser.id, content, messageType: 'DIRECT' });
       setMessages(prev => [...prev, r.data]);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch {}
@@ -115,7 +125,7 @@ const Chat: React.FC = () => {
                         className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-xs lg:max-w-md px-4 py-2.5 rounded-2xl text-sm ${isMine ? 'bg-primary text-white rounded-br-sm' : 'bg-gray-100 dark:bg-meta-4 text-black dark:text-white rounded-bl-sm'}`}>
                           <p>{msg.content}</p>
-                          <p className={`text-xs mt-1 ${isMine ? 'text-blue-200' : 'text-gray-400'}`}>{msg.sentAt ? format(new Date(msg.sentAt), 'h:mm a') : ''}</p>
+                          <p className={`text-xs mt-1 ${isMine ? 'text-blue-200' : 'text-gray-400'}`}>{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</p>
                         </div>
                       </motion.div>
                     );

@@ -24,12 +24,15 @@ const Users = lazy(() => import('./pages/Users'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Calendar = lazy(() => import('./pages/Calendar'));
+const Timesheet = lazy(() => import('./pages/Timesheet'));
+const TimesheetManagement = lazy(() => import('./pages/HR/TimesheetManagement'));
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
 // Route guard: redirect to sign-in if not authenticated
 const ProtectedRoute: React.FC<{ roles?: string[] }> = ({ roles }) => {
-  const { isAuthenticated, userRole } = useAuth();
+  const { isAuthenticated, isLoading, userRole } = useAuth();
+  if (isLoading) return <Loader />;
   if (!isAuthenticated) return <Navigate to="/auth/signin" replace />;
   if (roles && roles.length > 0 && !roles.includes(userRole)) return <Navigate to="/dashboard" replace />;
   return <Outlet />;
@@ -43,21 +46,22 @@ const DashboardRoute: React.FC = () => {
 
 // Redirect root based on auth
 const RootRedirect: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <Loader />;
   return <Navigate to={isAuthenticated ? '/dashboard' : '/auth/signin'} replace />;
 };
 
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <Routes>
       {/* Root redirect */}
       <Route path="/" element={<RootRedirect />} />
 
-      {/* Auth routes  redirect to dashboard if already logged in */}
-      <Route path="/auth/signin" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />} />
-      <Route path="/auth/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignUp />} />
+      {/* Auth routes — redirect to dashboard if already logged in */}
+      <Route path="/auth/signin" element={isLoading ? <Loader /> : isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />} />
+      <Route path="/auth/signup" element={isLoading ? <Loader /> : isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignUp />} />
       {/* Legacy path support */}
       <Route path="/auth/sign-in" element={<Navigate to="/auth/signin" replace />} />
       <Route path="/auth/sign-up" element={<Navigate to="/auth/signup" replace />} />
@@ -75,10 +79,12 @@ const AppRoutes: React.FC = () => {
           <Route path="/chat" element={<Suspense fallback={<Loader />}><Chat /></Suspense>} />
           <Route path="/profile" element={<Suspense fallback={<Loader />}><Profile /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<Loader />}><Settings /></Suspense>} />
+          <Route path="/timesheet" element={<Suspense fallback={<Loader />}><Timesheet /></Suspense>} />
 
           {/* HR-only routes */}
           <Route element={<ProtectedRoute roles={['HR']} />}>
             <Route path="/users" element={<Suspense fallback={<Loader />}><Users /></Suspense>} />
+            <Route path="/hr/timesheets" element={<Suspense fallback={<Loader />}><TimesheetManagement /></Suspense>} />
           </Route>
         </Route>
       </Route>

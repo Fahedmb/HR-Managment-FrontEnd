@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, Download, UserCheck, Shield } from 'lucide-react';
-import { usersApi } from '../services/api';
+import { usersApi, authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { Alert } from '../components/ui/Alert';
@@ -53,11 +53,11 @@ const Users: React.FC = () => {
   const handleSave = async () => {
     if (!form.firstName || !form.lastName || !form.email) { setAlert({ type: 'danger', msg: 'Name and email are required.' }); return; }
     try {
-      const payload = { ...form, ...(form.password ? {} : { password: undefined }) };
+      const payload = { ...form, role: form.role as 'HR' | 'EMPLOYEE' | 'MANAGER', ...(form.password ? {} : { password: undefined }) };
       if (editUser) { await usersApi.update(editUser.id, payload); setAlert({ type: 'success', msg: 'User updated.' }); }
       else {
         if (!form.password) { setAlert({ type: 'danger', msg: 'Password is required for new users.' }); return; }
-        await usersApi.create(payload); setAlert({ type: 'success', msg: 'User created.' });
+        await authApi.register(payload as Parameters<typeof authApi.register>[0]); setAlert({ type: 'success', msg: 'User created.' });
       }
       setFormOpen(false); load();
     } catch { setAlert({ type: 'danger', msg: 'Failed to save user.' }); }

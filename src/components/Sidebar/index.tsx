@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, LayoutDashboard, CheckSquare, Calendar, Clock,
   Users, FolderKanban, UsersRound, Video, MessageCircle,
-  User, Settings, ChevronDown, LogOut, X
+  LogOut, X, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -53,13 +53,8 @@ const NAV_GROUPS: NavGroup[] = [
     roles: ['HR'],
     items: [
       { label: 'Users', path: '/users', icon: <Users className="w-5 h-5" />, roles: ['HR'] },
-    ],
-  },
-  {
-    title: 'Account',
-    items: [
-      { label: 'Profile', path: '/profile', icon: <User className="w-5 h-5" /> },
-      { label: 'Settings', path: '/settings', icon: <Settings className="w-5 h-5" /> },
+      { label: 'Manage Leaves', path: '/leave', icon: <ClipboardList className="w-5 h-5" />, roles: ['HR'] },
+      { label: 'Manage Timesheets', path: '/hr/timesheets', icon: <Clock className="w-5 h-5" />, roles: ['HR'] },
     ],
   },
 ];

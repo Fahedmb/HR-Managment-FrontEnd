@@ -62,11 +62,14 @@ export interface TimeSheet {
 export interface TimesheetSchedule {
   id: number;
   userId: number;
-  weekStart: string;
+  chosenDays: DayOfWeekEnum[];
+  startTime: string;           // "HH:mm:ss"
+  hoursPerDay: number;
+  totalHoursPerWeek: number;
   status: ScheduleStatus;
-  timeSheets: TimeSheet[];
   createdAt: string;
   updatedAt: string;
+  userEmail?: string;
 }
 
 // ===================== PROJECTS =====================

@@ -7,12 +7,25 @@ import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { Alert, StatusBadge } from '../components/ui/Alert';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import type { Meeting, MeetingStatus, User } from '../types';
-import { format, isPast } from 'date-fns';
+import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const STATUSES: MeetingStatus[] = ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
-const defaultForm = { title: '', description: '', startTime: '', endTime: '', location: '', meetingLink: '', attendeeIds: [] as number[] };
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+const defaultForm = {
+  title: '',
+  description: '',
+  meetingDate: new Date().toISOString().slice(0, 10),
+  startHour: 9,
+  startMinute: 0,
+  durationMinutes: 60,
+  location: '',
+  meetingLink: '',
+  attendeeIds: [] as number[],
+};
 
 const Meetings: React.FC = () => {
   const { user } = useAuth();
@@ -45,13 +58,40 @@ const Meetings: React.FC = () => {
   const openCreate = () => { setEditMeeting(null); setForm(defaultForm); setFormOpen(true); };
   const openEdit = (m: Meeting) => {
     setEditMeeting(m);
-    setForm({ title: m.title, description: m.description || '', startTime: m.startTime?.slice(0, 16) || '', endTime: m.endTime?.slice(0, 16) || '', location: m.location || '', meetingLink: m.meetingLink || '', attendeeIds: m.attendees?.map(a => a.id) ?? [] });
+    const st = m.startTime ? new Date(m.startTime) : new Date();
+    const et = m.endTime ? new Date(m.endTime) : new Date(st.getTime() + 3600000);
+    const durMin = Math.round((et.getTime() - st.getTime()) / 60000);
+    const validDurs = [30, 60, 90, 120, 180, 240];
+    setForm({
+      title: m.title,
+      description: m.description || '',
+      meetingDate: st.toISOString().slice(0, 10),
+      startHour: st.getHours(),
+      startMinute: st.getMinutes() >= 30 ? 30 : 0,
+      durationMinutes: validDurs.includes(durMin) ? durMin : 60,
+      location: m.location || '',
+      meetingLink: m.meetingLink || '',
+      attendeeIds: m.attendees?.map(a => a.id) ?? [],
+    });
     setFormOpen(true);
   };
 
   const handleSave = async () => {
+    if (!form.title.trim()) { setAlert({ type: 'danger', msg: 'Title is required.' }); return; }
     try {
-      const payload = { ...form, organizerId: user!.id };
+      const startTime = `${form.meetingDate}T${pad(form.startHour)}:${pad(form.startMinute)}:00`;
+      const endMs = new Date(startTime).getTime() + form.durationMinutes * 60000;
+      const endTime = new Date(endMs).toISOString().slice(0, 19);
+      const payload = {
+        title: form.title,
+        description: form.description,
+        startTime,
+        endTime,
+        location: form.location,
+        meetingLink: form.meetingLink,
+        attendeeIds: form.attendeeIds,
+        organizerId: user!.id,
+      };
       if (editMeeting) { await meetingsApi.update(editMeeting.id, payload); setAlert({ type: 'success', msg: 'Meeting updated.' }); }
       else { await meetingsApi.create(payload); setAlert({ type: 'success', msg: 'Meeting created.' }); }
       setFormOpen(false); load();
@@ -159,9 +199,47 @@ const Meetings: React.FC = () => {
         <div className="space-y-3">
           <div><label className="block text-sm font-medium mb-1">Title</label><input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent focus:outline-none focus:ring-2 focus:ring-primary text-sm" /></div>
           <div><label className="block text-sm font-medium mb-1">Description</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent focus:outline-none focus:ring-2 focus:ring-primary text-sm resize-none" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium mb-1">Start</label><input type="datetime-local" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-            <div><label className="block text-sm font-medium mb-1">End</label><input type="datetime-local" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+          {/* Date / Time / Duration row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Date</label>
+              <input type="date" value={form.meetingDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Start Time</label>
+              <select
+                value={`${form.startHour}:${form.startMinute}`}
+                onChange={e => {
+                  const [h, m] = e.target.value.split(':').map(Number);
+                  setForm(f => ({ ...f, startHour: h, startMinute: m }));
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                {Array.from({ length: 30 }, (_, i) => {
+                  const h = Math.floor(i / 2) + 7; // 7:00 AM – 9:30 PM
+                  const m = i % 2 === 0 ? 0 : 30;
+                  const ampm = h < 12 ? 'AM' : 'PM';
+                  const h12 = h % 12 || 12;
+                  return <option key={i} value={`${h}:${m}`}>{`${h12}:${m === 0 ? '00' : '30'} ${ampm}`}</option>;
+                })}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Duration</label>
+              <select
+                value={form.durationMinutes}
+                onChange={e => setForm(f => ({ ...f, durationMinutes: Number(e.target.value) }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value={30}>30 min</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+                <option value={180}>3 hours</option>
+                <option value={240}>4 hours</option>
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-sm font-medium mb-1">Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="Room / address" className="w-full px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>

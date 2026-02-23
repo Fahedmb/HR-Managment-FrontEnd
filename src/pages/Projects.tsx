@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Briefcase, Calendar, Users, Trash2, Edit2, Eye, Filter, Download } from 'lucide-react';
-import { projectsApi, usersApi } from '../services/api';
+import { Plus, Briefcase, Calendar, Trash2, Edit2, Download } from 'lucide-react';
+import { projectsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { StatusBadge, Alert } from '../components/ui/Alert';

@@ -16,14 +16,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally — dispatch a custom event so AuthContext can do a
+// soft React-Router logout instead of a hard page reload.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/auth/signin';
+      window.dispatchEvent(new Event('auth-401'));
     }
     return Promise.reject(error);
   }
