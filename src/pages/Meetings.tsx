@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Calendar, MapPin, Video, Users, XCircle, Edit2, Download } from 'lucide-react';
+import { Plus, Calendar, MapPin, Video, Users, XCircle, Edit2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { meetingsApi, usersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { Alert, StatusBadge } from '../components/ui/Alert';
 import { Modal, ConfirmModal } from '../components/ui/Modal';
 import type { Meeting, MeetingStatus, User } from '../types';
-import { format } from 'date-fns';
+import {
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  addDays, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths
+} from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -40,6 +43,31 @@ const Meetings: React.FC = () => {
   const [editMeeting, setEditMeeting] = useState<Meeting | null>(null);
   const [cancelId, setCancelId] = useState<number | null>(null);
   const [form, setForm] = useState(defaultForm);
+
+  // Calendar state
+  const [calMonth, setCalMonth] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(calMonth));
+    const end = endOfWeek(endOfMonth(calMonth));
+    const days: Date[] = [];
+    for (let d = start; d <= end; d = addDays(d, 1)) days.push(new Date(d));
+    return days;
+  }, [calMonth]);
+
+  const meetingsOnDay = (day: Date) =>
+    meetings.filter(m => {
+      try { return m.startTime && isSameDay(parseISO(m.startTime), day); }
+      catch { return false; }
+    });
+
+  const STATUS_DOT: Record<MeetingStatus, string> = {
+    SCHEDULED: 'bg-blue-500',
+    IN_PROGRESS: 'bg-green-500',
+    COMPLETED: 'bg-gray-400',
+    CANCELLED: 'bg-red-400',
+  };
 
   const load = async () => {
     setLoading(true);
@@ -128,6 +156,128 @@ const Meetings: React.FC = () => {
       <AnimatePresence>
         {alert && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-4"><Alert variant={alert.type} message={alert.msg} onClose={() => setAlert(null)} /></motion.div>}
       </AnimatePresence>
+
+      {/* ── Calendar ── */}
+      <div className="rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-sm overflow-hidden mb-6">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stroke dark:border-strokedark">
+          <button onClick={() => setCalMonth(m => subMonths(m, 1))}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors">
+            <ChevronLeft className="w-5 h-5 text-gray-500" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-semibold text-black dark:text-white">
+              {format(calMonth, 'MMMM yyyy')}
+            </h2>
+            <button
+              onClick={() => { const t = new Date(); setCalMonth(t); setSelectedDay(t); }}
+              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+              Today
+            </button>
+          </div>
+          <button onClick={() => setCalMonth(m => addMonths(m, 1))}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors">
+            <ChevronRight className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 border-b border-stroke dark:border-strokedark">
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">{d}</div>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div className="grid grid-cols-7 divide-x divide-y divide-stroke dark:divide-strokedark">
+          {calendarDays.map(day => {
+            const dayMeetings = meetingsOnDay(day);
+            const inMonth = isSameMonth(day, calMonth);
+            const isSelected = selectedDay && isSameDay(day, selectedDay);
+            const today = isToday(day);
+            return (
+              <div key={day.toISOString()}
+                onClick={() => setSelectedDay(isSelected ? null : day)}
+                className={`min-h-[80px] p-1.5 cursor-pointer transition-colors select-none
+                  ${inMonth ? 'bg-white dark:bg-boxdark' : 'bg-gray-50/60 dark:bg-boxdark-2'}
+                  ${isSelected ? 'ring-2 ring-inset ring-primary' : 'hover:bg-blue-50/60 dark:hover:bg-meta-4'}`}>
+                <div className={`w-7 h-7 flex items-center justify-center mx-auto rounded-full text-sm mb-1 font-medium
+                  ${today ? 'bg-primary text-white font-bold'
+                  : inMonth ? 'text-black dark:text-white'
+                  : 'text-gray-300 dark:text-gray-600'}`}>
+                  {format(day, 'd')}
+                </div>
+                <div className="space-y-0.5">
+                  {dayMeetings.slice(0, 3).map((m, i) => (
+                    <div key={`${m.id}-${i}`}
+                      className="flex items-center gap-1 px-1 py-0.5 rounded text-[11px] leading-tight truncate bg-blue-100 text-blue-700">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[m.status]}`} />
+                      <span className="truncate">{m.title}</span>
+                    </div>
+                  ))}
+                  {dayMeetings.length > 3 && (
+                    <div className="text-[11px] text-gray-400 text-center">+{dayMeetings.length - 3} more</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Selected day panel */}
+        <AnimatePresence>
+          {selectedDay && (() => {
+            const dayMeetings = meetingsOnDay(selectedDay);
+            return (
+              <motion.div key="cal-day" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="border-t border-stroke dark:border-strokedark px-5 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-semibold text-black dark:text-white text-sm">
+                    {format(selectedDay, 'EEEE, MMMM d, yyyy')}
+                  </span>
+                  <button onClick={() => setSelectedDay(null)}
+                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-meta-4 text-gray-400">
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+                {dayMeetings.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-4">No meetings on this day.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dayMeetings.map((m, i) => (
+                      <motion.div key={m.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border-l-4 ${STATUS_BG[m.status]}`}>
+                        <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate">{m.title}</p>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-500">
+                            {m.startTime && <span>{format(new Date(m.startTime), 'HH:mm')}{m.endTime && ` – ${format(new Date(m.endTime), 'HH:mm')}`}</span>}
+                            {m.location && <span>· {m.location}</span>}
+                            <StatusBadge status={m.status} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex flex-wrap items-center gap-3 mb-5 text-xs text-gray-500">
+        <span className="font-medium text-gray-400">Status:</span>
+        {(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELLED'] as MeetingStatus[]).map(s => (
+          <span key={s} className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${STATUS_DOT[s]}`} />
+            {s.replace('_', ' ')}
+          </span>
+        ))}
+      </div>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
