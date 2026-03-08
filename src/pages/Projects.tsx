@@ -65,8 +65,8 @@ const Projects: React.FC = () => {
       await projectsApi.delete(id);
       setAlert({ type: 'success', msg: 'Project deleted.' });
       load();
-    } catch {
-      setAlert({ type: 'danger', msg: 'Failed to delete project.' });
+    } catch (err: any) {
+      setAlert({ type: 'danger', msg: err?.response?.data?.message || 'Failed to delete project.' });
     }
   };
 

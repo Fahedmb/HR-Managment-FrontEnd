@@ -15,12 +15,63 @@ const LEAVE_TYPES: LeaveType[] = ['VACATION', 'SICK', 'PERSONAL', 'MATERNITY', '
 const STATUSES: LeaveStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'];
 const defaultForm = { leaveType: 'VACATION' as LeaveType, startDate: '', endDate: '', reason: '', halfDay: false };
 
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const MiniLeaveCalendar: React.FC<{ startDate: string; endDate: string }> = ({ startDate, endDate }) => {
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  const months: { year: number; month: number }[] = [];
+  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  const endM = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cur <= endM) {
+    months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+  return (
+    <div className="rounded-xl bg-gray-50 dark:bg-meta-4 p-3 space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Leave Calendar Preview</p>
+      {months.map(({ year, month }) => {
+        const firstDow = new Date(year, month, 1).getDay();
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        const blanks = Array(firstDow).fill(null);
+        return (
+          <div key={`${year}-${month}`}>
+            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2 text-center">
+              {MONTH_NAMES[month]} {year}
+            </p>
+            <div className="grid grid-cols-7 text-center gap-y-0.5">
+              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                <div key={d} className="text-[10px] font-medium text-gray-400 py-0.5">{d}</div>
+              ))}
+              {blanks.map((_, i) => <div key={`b${i}`} />)}
+              {Array.from({ length: totalDays }, (_, i) => i + 1).map(d => {
+                const thisDate = new Date(year, month, d);
+                const inRange = thisDate >= start && thisDate <= end;
+                const isEdge = thisDate.toDateString() === start.toDateString() || thisDate.toDateString() === end.toDateString();
+                return (
+                  <div key={d} className={`text-[11px] py-0.5 mx-0.5 rounded-md font-medium leading-5 ${
+                    isEdge ? 'bg-primary text-white' :
+                    inRange ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                    'text-gray-600 dark:text-gray-400'
+                  }`}>
+                    {d}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const LeaveRequests: React.FC = () => {
   const { user } = useAuth();
   const isHR = user?.role === 'HR';
 
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [balance, setBalance] = useState<Record<string, number>>({});
+  const [balance, setBalance] = useState<{ total: number; used: number; balance: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [alert, setAlert] = useState<{ type: 'success' | 'danger'; msg: string } | null>(null);
@@ -54,7 +105,7 @@ const LeaveRequests: React.FC = () => {
       await leaveApi.create({ type: form.leaveType, startDate: form.startDate, endDate: form.endDate, reason: form.reason, halfDay: form.halfDay, userId: user!.id });
       setAlert({ type: 'success', msg: 'Leave request submitted.' });
       setFormOpen(false); load();
-    } catch { setAlert({ type: 'danger', msg: 'Failed to submit request.' }); }
+    } catch (err: any) { setAlert({ type: 'danger', msg: err?.response?.data?.message || 'Failed to submit request.' }); }
   };
 
   const handleCancel = async (id: number) => {
@@ -69,7 +120,7 @@ const LeaveRequests: React.FC = () => {
       else await leaveApi.updateStatus(reviewModal.id, 'REJECTED', user!.id, reviewComment);
       setAlert({ type: 'success', msg: `Request ${action}d.` });
       setReviewModal(null); setReviewComment(''); setReviewAction(null); load();
-    } catch { setAlert({ type: 'danger', msg: `Failed to ${action} request.` }); }
+    } catch (err: any) { setAlert({ type: 'danger', msg: err?.response?.data?.message || `Failed to ${action} request.` }); }
   };
 
   const exportPDF = () => {
@@ -94,18 +145,29 @@ const LeaveRequests: React.FC = () => {
         {alert && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-4"><Alert variant={alert.type} message={alert.msg} onClose={() => setAlert(null)} /></motion.div>}
       </AnimatePresence>
 
-      {/* Balance Cards (employee only) */}
-      {!isHR && Object.keys(balance).length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          {Object.entries(balance).map(([type, remaining]) => (
-            <motion.div key={type} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark p-4 text-center">
-              <p className="text-xs text-gray-400 uppercase tracking-wider">{type}</p>
-              <p className="text-3xl font-bold text-black dark:text-white mt-1">{remaining}</p>
-              <p className="text-xs text-gray-400">days left</p>
-            </motion.div>
-          ))}
-        </div>
+      {/* Balance Card (employee only) */}
+      {!isHR && balance && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark p-4 mb-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Annual Leave Balance {new Date().getFullYear()}</p>
+              <p className="text-3xl font-bold text-black dark:text-white mt-0.5">
+                {balance.balance}
+                <span className="text-base font-normal text-gray-400 ml-1">/ {balance.total} days</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-400 mb-1">Used: <span className="font-semibold text-black dark:text-white">{balance.used}</span> days</p>
+              <div className="w-40 h-2.5 bg-gray-100 dark:bg-meta-4 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all"
+                  style={{ width: `${Math.min((balance.used / balance.total) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       {/* Toolbar */}
@@ -184,20 +246,27 @@ const LeaveRequests: React.FC = () => {
       </Modal>
 
       {/* Review Modal */}
-      <Modal isOpen={reviewModal !== null} onClose={() => setReviewModal(null)} title={reviewAction === 'approve' ? 'Approve Request' : 'Reject Request'} footer={
+      <Modal isOpen={reviewModal !== null} onClose={() => setReviewModal(null)} size="lg" title={reviewAction === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'} footer={
         <><button onClick={() => setReviewModal(null)} className="px-4 py-2 text-sm rounded-xl border border-stroke dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4">Cancel</button>
         <button onClick={() => reviewAction && handleReview(reviewAction)} className={`px-4 py-2 text-sm rounded-xl text-white ${reviewAction === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>{reviewAction === 'approve' ? 'Approve' : 'Reject'}</button></>
       }>
-        <div>
+        <div className="space-y-3">
           {reviewModal && (
-            <div className="mb-3 p-3 rounded-xl bg-gray-50 dark:bg-meta-4 text-sm">
-              <p><span className="font-medium">Employee: </span>{reviewModal.firstName} {reviewModal.lastName}</p>
-              <p><span className="font-medium">Type: </span>{reviewModal.type}</p>
-              <p><span className="font-medium">Period: </span>{reviewModal.startDate} → {reviewModal.endDate}</p>
-            </div>
+            <>
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-meta-4 text-sm space-y-1">
+                <p><span className="font-medium">Employee: </span>{reviewModal.firstName} {reviewModal.lastName}</p>
+                <p><span className="font-medium">Type: </span>{reviewModal.type}</p>
+                <p><span className="font-medium">Period: </span>{format(new Date(reviewModal.startDate), 'MMM d, yyyy')} → {format(new Date(reviewModal.endDate), 'MMM d, yyyy')} ({reviewModal.daysCount} day{reviewModal.daysCount !== 1 ? 's' : ''})</p>
+                {reviewModal.reason && <p><span className="font-medium">Reason: </span>{reviewModal.reason}</p>}
+                {reviewModal.halfDay && <p className="text-yellow-600 dark:text-yellow-400 font-medium">⚡ Half Day Request</p>}
+              </div>
+              <MiniLeaveCalendar startDate={reviewModal.startDate} endDate={reviewModal.endDate} />
+            </>
           )}
-          <label className="block text-sm font-medium mb-1">Comment (optional)</label>
-          <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} rows={3} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Add a note to the employee..." />
+          <div>
+            <label className="block text-sm font-medium mb-1">Comment (optional)</label>
+            <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} rows={3} className="w-full px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Add a note to the employee..." />
+          </div>
         </div>
       </Modal>
 

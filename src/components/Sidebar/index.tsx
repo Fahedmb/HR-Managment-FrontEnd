@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     };
     document.addEventListener('click', clickHandler);
     return () => document.removeEventListener('click', clickHandler);
-  });
+  }, [sidebarOpen]);
 
   useEffect(() => {
     const keyHandler = ({ key }: KeyboardEvent) => {
@@ -83,15 +83,23 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     };
     document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('keydown', keyHandler);
-  });
+  }, [sidebarOpen]);
 
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '?';
 
   return (
-    <aside
-      ref={sidebar}
-      className={`absolute left-0 top-0 z-9999 flex h-screen w-72.5 flex-col overflow-y-hidden bg-boxdark duration-300 ease-linear dark:bg-boxdark lg:static lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-    >
+    <>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-[9998] bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        ref={sidebar}
+        className={`absolute left-0 top-0 z-9999 flex h-screen w-72.5 flex-col overflow-y-hidden bg-boxdark duration-300 ease-linear dark:bg-boxdark lg:static lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
       {/* Header / Logo */}
       <div className="flex items-center justify-between px-6 py-5.5 lg:py-6.5">
         <NavLink to="/dashboard" className="flex items-center gap-3">
@@ -164,7 +172,8 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
           </button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

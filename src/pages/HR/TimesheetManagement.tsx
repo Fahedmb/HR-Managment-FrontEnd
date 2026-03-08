@@ -264,14 +264,20 @@ const TimesheetManagement: React.FC = () => {
                 <p className="text-sm font-medium text-black dark:text-white">{viewSchedule.startTime ?? '—'}</p>
               </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Work Days</p>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {(viewSchedule.chosenDays ?? []).map(d => (
-                  <span key={d} className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-boxdark text-blue-600 text-sm font-medium">
-                    {DAY_ABBR[d] ?? d}
-                  </span>
-                ))}
+            <div className="col-span-2">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Weekly Schedule</p>
+              <div className="grid grid-cols-7 gap-1">
+                {(['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'] as const).map(day => {
+                  const active = (viewSchedule.chosenDays ?? []).includes(day);
+                  return (
+                    <div key={day} className={`rounded-lg p-2 text-center transition-colors ${
+                      active ? 'bg-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-meta-4 text-gray-400'
+                    }`}>
+                      <div className="text-[11px] font-semibold">{DAY_ABBR[day]}</div>
+                      {active && <div className="text-[10px] opacity-80 mt-0.5">{viewSchedule.hoursPerDay ?? '—'}h</div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             {viewSchedule.status === 'PENDING' && (

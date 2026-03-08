@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, Download, UserCheck, Shield } from 'lucide-react';
-import { usersApi, authApi } from '../services/api';
+import { usersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import { Alert } from '../components/ui/Alert';
@@ -57,15 +57,15 @@ const Users: React.FC = () => {
       if (editUser) { await usersApi.update(editUser.id, payload); setAlert({ type: 'success', msg: 'User updated.' }); }
       else {
         if (!form.password) { setAlert({ type: 'danger', msg: 'Password is required for new users.' }); return; }
-        await authApi.register(payload as Parameters<typeof authApi.register>[0]); setAlert({ type: 'success', msg: 'User created.' });
+        await usersApi.create(payload as Parameters<typeof usersApi.create>[0]); setAlert({ type: 'success', msg: 'User created.' });
       }
       setFormOpen(false); load();
-    } catch { setAlert({ type: 'danger', msg: 'Failed to save user.' }); }
+    } catch (err: any) { setAlert({ type: 'danger', msg: err?.response?.data?.message || 'Failed to save user.' }); }
   };
 
   const handleDelete = async (id: number) => {
     try { await usersApi.delete(id); setAlert({ type: 'success', msg: 'User deleted.' }); load(); }
-    catch { setAlert({ type: 'danger', msg: 'Failed to delete user.' }); }
+    catch (err: any) { setAlert({ type: 'danger', msg: err?.response?.data?.message || 'Failed to delete user.' }); }
   };
 
   const exportPDF = () => {

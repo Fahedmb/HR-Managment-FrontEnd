@@ -9,6 +9,7 @@ export interface User {
   department: string;
   role: 'HR' | 'EMPLOYEE' | 'MANAGER';
   usedDaysThisYear: number;
+  leaveBalance?: number;
   createdAt: string;
   updatedAt: string;
 }

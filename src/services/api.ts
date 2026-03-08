@@ -36,6 +36,8 @@ export const usersApi = {
   getById: (id: number) => api.get<User>(`/api/users/${id}`),
   getByDepartment: (department: string) => api.get<User[]>(`/api/users/department/${department}`),
   getByRole: (role: string) => api.get<User[]>(`/api/users/role/${role}`),
+  create: (data: { firstName: string; lastName: string; email: string; password: string; role?: string; position?: string; department?: string }) =>
+    api.post<User>('/api/users', data),
   update: (id: number, data: Partial<User>) => api.put<User>(`/api/users/${id}`, data),
   changeRole: (id: number, role: string) => api.patch<User>(`/api/users/${id}/role`, { role }),
   resetPassword: (id: number, newPassword: string) =>
@@ -48,7 +50,8 @@ export const leaveApi = {
   getAll: () => api.get<LeaveRequest[]>('/api/leave-requests'),
   getById: (id: number) => api.get<LeaveRequest>(`/api/leave-requests/${id}`),
   getByUser: (userId: number) => api.get<LeaveRequest[]>(`/api/leave-requests/user/${userId}`),
-  getBalance: () => api.get<{ balance: number }>('/api/leave-requests/balance'),
+  getBalance: () => api.get<{ total: number; used: number; balance: number }>('/api/leave-requests/balance'),
+  getBalanceForUser: (userId: number) => api.get<{ total: number; used: number; balance: number }>(`/api/leave-requests/balance/user/${userId}`),
   create: (data: Partial<LeaveRequest>) => api.post<LeaveRequest>('/api/leave-requests', data),
   update: (id: number, data: Partial<LeaveRequest>) =>
     api.put<LeaveRequest>(`/api/leave-requests/${id}`, data),
